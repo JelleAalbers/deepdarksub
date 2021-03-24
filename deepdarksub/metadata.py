@@ -69,6 +69,10 @@ def load_metadata(
           f"Total images: {len(meta)}; {len(meta) - meta['is_val'].sum()} for training and "
           f"{meta['is_val'].sum()} for validation.")
 
+    # Default to uniform training weights
+    if 'training_weight' not in meta.columns:
+        meta['training_weight'] = 1.
+
     return meta, gis
 
 

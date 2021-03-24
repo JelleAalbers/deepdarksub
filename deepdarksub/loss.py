@@ -28,10 +28,9 @@ class UncertaintyLoss(fv.nn.Module):
         super().__init__(*args, **kwargs)
 
     def forward(self, x, y, **kwargs):
-        # Split off the uncertainty terms.
-        # Note y_unc is just a dummy and not used. (maybe we can remove it?)
-        x_unc, y_unc = x[:, self.n_params:], y[:, self.n_params:]
-        x, y = x[:, :self.n_params], y[:, :self.n_params]
+        # Split off the actual parameters from uncertainties and weight
+        x, x_unc = x[:, :self.n_params], x[:, self.n_params:]
+        y, weight = y[:, :self.n_params], y[:, self.n_params]
 
         # Let neural net predict the log2 of the uncertainty.
         # (Maybe bad, but you have to give some meaning to negative values)
@@ -46,7 +45,7 @@ class UncertaintyLoss(fv.nn.Module):
         #    0.2: errors just stay at 1
         loss += x_unc.mean(axis=1)
 
-        return loss.mean()
+        return (weight * loss).mean()
 
 
 @export
@@ -63,7 +62,7 @@ class CorrelatedUncertaintyLoss(fv.nn.Module):
 
     def forward(self, x, y, **kwargs):
         x_p, L = x_to_xp_L(x, self.n_params)
-        y = y[:, :self.n_params]
+        y, weight = y[:, :self.n_params], y[:, self.n_params]
 
         # Loss part 1: Mahalanobis distance
         delta = x_p - y
@@ -75,7 +74,7 @@ class CorrelatedUncertaintyLoss(fv.nn.Module):
         # Part 2: penalty term for uncertainty/covariances
         loss2 = - 2 * torch.diagonal(torch.log(L), dim1=-2, dim2=-1).sum(-1)
 
-        return (loss1 + loss2).mean()
+        return ((loss1 + loss2) * weight).mean()
 
 
 @export
@@ -113,7 +112,7 @@ def x_to_xp_L(x, n):
     if not isinstance(x, torch.Tensor):
         x = torch.Tensor(x)
     n_batch, n_out = x.shape
-    assert n_out == n_out_with_covariance(n), "Wrong number of outputs"
+    assert n_out == dds.n_out(n, 'covariance'), "Wrong number of outputs"
 
     # Split off the covariance terms from x
     x_p, x_diag, x_nondiag = x[:, :n], x[:, n:2 * n], x[:, 2 * n:]

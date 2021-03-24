@@ -52,18 +52,18 @@ def repeat_color(x):
     return x
 
 
-def _get_y(fn, *, meta, normalizer, n_dummy_outputs, fit_parameters):
+def _get_y(fn, *, meta, normalizer, fit_parameters):
     """Return list of desired outputs for image filename fn"""
     q = dds.meta_for_filename(meta, fn)
     y = [normalizer.norm(q[p], p) for p in fit_parameters]
-    y += [1] * n_dummy_outputs
+    y += [q.training_weight]
     return y
 
 
 @export
 def data_block(
         meta, fit_parameters, data_dir,
-        uncertainty=False,
+        uncertainty,
         augment_rotation='free',
         rotation_pad_mode='zeros',
         do_repeat_color=False,
@@ -90,18 +90,16 @@ def data_block(
     # Maybe related: https://github.com/fastai/fastai/issues/3250
     batch_tfms += [fv.Normalize(mean=torch.tensor(0.), std=torch.tensor(1.))]
 
-    n_out = dds.n_out(n_params, uncertainty)
     return fv.DataBlock(
         blocks=(fv.TransformBlock(
                     type_tfms=NumpyImage.create,
                     batch_tfms=[repeat_color] if do_repeat_color else []),
-                fv.RegressionBlock(n_out=n_out)),
+                fv.RegressionBlock(n_out=dds.n_out(n_params, uncertainty=uncertainty))),
         get_items=lambda _: tuple([data_dir / fn
                                    for fn in meta['filename'].values.tolist()]),
         get_y=partial(_get_y,
                       meta=meta,
                       normalizer=normalizer,
-                      n_dummy_outputs=n_out,
                       fit_parameters=fit_parameters),
         splitter=fv.FuncSplitter(lambda fn: dds.meta_for_filename(meta, fn).is_val),
         batch_tfms=batch_tfms,
