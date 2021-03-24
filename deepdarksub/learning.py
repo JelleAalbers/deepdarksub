@@ -1,9 +1,10 @@
+import contextlib
+from pathlib import Path
 from functools import partial
 
 import fastai.vision.all as fv
 import numpy as np
 import PIL
-from scipy import stats
 import torch
 
 import deepdarksub as dds
@@ -30,6 +31,13 @@ class NumpyImage(fv.PILImage):
         # Divide by max, or should we divide by some percentile?
         data /= data.max()
 
+        # Log and normalize
+        # vmax = np.max(data)
+        # vmin = 1e-3 * vmax
+        # data = np.log(data.clip(vmin, vmax))
+        # vmin, vmax = np.log(vmin), np.log(vmax)
+        # data = (data - vmin) / (vmax - vmin)
+
         data = data.clip(0, 1)
 
         return cls(PIL.Image.fromarray(data))
@@ -44,54 +52,18 @@ def repeat_color(x):
     return x
 
 
-
-@export
-class UncertaintyLoss(fv.nn.Module):
-    """Custom loss for nets that output values and uncertainties"""
-
-    def __init__(self, n_params, *args, **kwargs):
-        self.n_params = n_params
-        super().__init__(*args, **kwargs)
-
-    def forward(self, x, y, **kwargs):
-        # Split off the uncertainty terms.
-        # Note y_unc is just a dummy and not used. (maybe we can remove it?)
-        x_unc, y_unc = x[:, self.n_params:], y[:, self.n_params:]
-        x, y = x[:, :self.n_params], y[:, :self.n_params]
-
-        # Let neural net predict the log2 of the uncertainty.
-        # (Maybe bad, but you have to give some meaning to negative values)
-        x_unc = 2 ** x_unc
-
-        # Part 1: abs error / uncertainty
-        loss = (torch.abs(x - y) / x_unc).mean(axis=1)
-
-        # Part 2: uncertainty
-        #    Not sure how to weight these
-        #    0.5, 1: seem OK both
-        #    0.2: errors just stay at 1
-        loss += x_unc.mean(axis=1)
-
-        return loss.mean()
-
-
-def _get_y(fn, meta, normalizer, add_uncertainty, fit_parameters):
+def _get_y(fn, *, meta, normalizer, n_dummy_outputs, fit_parameters):
     """Return list of desired outputs for image filename fn"""
     q = dds.meta_for_filename(meta, fn)
-
-    # Get fit parameters
     y = [normalizer.norm(q[p], p) for p in fit_parameters]
-    if add_uncertainty:
-        # Add dummy outputs for uncertainties
-        # (values do not matter, these do not enter the loss)
-        y += [1] * len(fit_parameters)
+    y += [1] * n_dummy_outputs
     return y
 
 
 @export
 def data_block(
         meta, fit_parameters, data_dir,
-        add_uncertainty=True,
+        uncertainty=False,
         augment_rotation='free',
         rotation_pad_mode='zeros',
         do_repeat_color=False,
@@ -118,18 +90,32 @@ def data_block(
     # Maybe related: https://github.com/fastai/fastai/issues/3250
     batch_tfms += [fv.Normalize(mean=torch.tensor(0.), std=torch.tensor(1.))]
 
+    n_out = dds.n_out(n_params, uncertainty)
     return fv.DataBlock(
         blocks=(fv.TransformBlock(
                     type_tfms=NumpyImage.create,
                     batch_tfms=[repeat_color] if do_repeat_color else []),
-                fv.RegressionBlock(n_out=2 * n_params if add_uncertainty else 2)),
+                fv.RegressionBlock(n_out=n_out)),
         get_items=lambda _: tuple([data_dir / fn
                                    for fn in meta['filename'].values.tolist()]),
         get_y=partial(_get_y,
                       meta=meta,
                       normalizer=normalizer,
-                      add_uncertainty=add_uncertainty,
+                      n_dummy_outputs=n_out,
                       fit_parameters=fit_parameters),
         splitter=fv.FuncSplitter(lambda fn: dds.meta_for_filename(meta, fn).is_val),
         batch_tfms=batch_tfms,
         **kwargs)
+
+
+@export
+def predict_many(learn, normalizer, filenames,
+                 uncertainty=False,
+                 progress=True,
+                 **kwargs):
+    if isinstance(filenames, (str, Path)):
+        filenames = [filenames]
+    dl = learn.dls.test_dl(filenames, **kwargs)
+    with (contextlib.nullcontext() if progress else learn.no_bar()):
+        preds = learn.get_preds(dl=dl)[0]
+    return normalizer.decode(preds, uncertainty=uncertainty)

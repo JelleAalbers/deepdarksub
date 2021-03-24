@@ -2,9 +2,10 @@ import manada
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from scipy import stats
 
-from .utils import exporter
-export, __all__ = exporter()
+import deepdarksub as dds
+export, __all__ = dds.exporter()
 
 
 @export
@@ -64,3 +65,34 @@ def plot_image(img,
 
     plt.xlabel("[Arcseconds]")
     plt.ylabel("[Arcseconds]")
+
+
+@export
+def r_label(x, y, result_name='',
+            c='k', fontsize=8, fit_line_style=None,
+            side='right'):
+    if fit_line_style is None:
+        fit_line_style = dict()
+    fit_line_style = {'c': c, 'alpha': 0.2, 'linestyle': '--',
+                      **fit_line_style}
+
+    fit, (slope, intercept) = dds.linear_fit(x, y)
+
+    # Plot linear fit, preserving lims
+    ylim = plt.ylim()
+    _x = np.linspace(*plt.xlim(), num=100)
+    plt.plot(_x, fit(_x), **fit_line_style)
+    plt.ylim(*ylim)
+
+    r = stats.pearsonr(x, y)[0]
+    if side == 'left':
+        position = dict(x=0.02, y=0.02, ha='left')
+    else:
+        position = dict(x=0.98, y=0.02, ha='right')
+    plt.text(s=(f"Slope = {slope:0.3f}, $R^2 = {r ** 2 * 100 :0.1f}$%"
+                + ("\n" + result_name if result_name else '')),
+             c=c, **position,
+             va='bottom', transform=plt.gca().transAxes,
+             fontsize=fontsize)
+
+    return r, fit

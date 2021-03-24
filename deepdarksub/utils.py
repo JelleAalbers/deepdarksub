@@ -2,6 +2,8 @@ import contextlib
 import importlib.util
 
 import numpy as np
+from scipy import stats
+import torch
 
 
 def exporter():
@@ -62,3 +64,38 @@ def load_py_file(path, module_name):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@export
+def double_matmul_batch(vec, mat):
+    """Does vec @ mat @ vec when both have a batch dimension."""
+    n_batch, n = vec.shape
+    return torch.matmul(
+        vec.reshape(n_batch, 1, n),
+        torch.matmul(
+            mat,
+            vec.reshape(n_batch, n, 1))).squeeze(1).squeeze(1)
+
+
+@export
+def logit(x):
+    """Return inverse sigmoid of x"""
+    # https://github.com/pytorch/pytorch/issues/37060
+    return torch.log(x) - torch.log1p(-x)
+
+
+@export
+def cov_to_std(cov):
+    """Return (std errors, correlation coefficent matrix)
+    given covariance matrix cov
+    """
+    std_errs = np.diag(cov) ** 0.5
+    corr = cov * np.outer(1 / std_errs, 1 / std_errs)
+    return std_errs, corr
+
+
+@export
+def linear_fit(x, y):
+    slope, intercept = np.polyfit(x, y, deg=1)
+    fit = np.poly1d([slope, intercept])
+    return fit, (slope, intercept)
