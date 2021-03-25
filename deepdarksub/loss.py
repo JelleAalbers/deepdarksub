@@ -9,7 +9,7 @@ export, __all__ = dds.exporter()
 @export
 def loss_for(n_params, uncertainty, do_sqrt=False):
     if not uncertainty:
-        return fv.mae
+        return WeightedLoss(n_params)
     elif uncertainty == 'diagonal':
         return UncertaintyLoss(n_params)
     elif uncertainty == 'correlated':
@@ -17,20 +17,30 @@ def loss_for(n_params, uncertainty, do_sqrt=False):
     else:
         raise ValueError(f"Uncertainty {uncertainty} not recognized")
 
-
 @export
-class UncertaintyLoss(fv.nn.Module):
-    """Custom loss for nets that output values and an estimate of
-    the uncertainty per variable
-    """
+class WeightedLoss(fv.nn.Module):
+
     def __init__(self, n_params, *args, **kwargs):
         self.n_params = n_params
         super().__init__(*args, **kwargs)
 
-    def forward(self, x, y, **kwargs):
-        # Split off the actual parameters from uncertainties and weight
-        x, x_unc = x[:, :self.n_params], x[:, self.n_params:]
+    def forward(self, x, y):
         y, weight = y[:, :self.n_params], y[:, self.n_params]
+        return (weight * self.loss(x, y)).mean()
+
+    def loss(self, x, y):
+        # Mean absolute error
+        return torch.mean(torch.abs(x - y), dim=1)
+
+@export
+class UncertaintyLoss(WeightedLoss):
+    """Custom loss for nets that output values and an estimate of
+    the uncertainty per variable
+    """
+
+    def loss(self, x, y):
+        # Split off the actual parameters from uncertainties
+        x, x_unc = x[:, :self.n_params], x[:, self.n_params:]
 
         # Let neural net predict the log2 of the uncertainty.
         # (Maybe bad, but you have to give some meaning to negative values)
@@ -45,25 +55,22 @@ class UncertaintyLoss(fv.nn.Module):
         #    0.2: errors just stay at 1
         loss += x_unc.mean(axis=1)
 
-        return (weight * loss).mean()
+        return loss
 
 
 @export
-class CorrelatedUncertaintyLoss(fv.nn.Module):
+class CorrelatedUncertaintyLoss(WeightedLoss):
     """Custom loss for nets that output values and an estimate of
     the Cholesky-decomposed inverse coveriance matrix L
     See https://arxiv.org/pdf/1802.07079.pdf (not the sparse part)
     """
 
-    def __init__(self, n_params, do_sqrt=False, *args, **kwargs):
-        self.n_params = n_params
+    def __init__(self, do_sqrt=False, *args, **kwargs):
         self.do_sqrt = do_sqrt
         super().__init__(*args, **kwargs)
 
-    def forward(self, x, y, **kwargs):
+    def loss(self, x, y):
         x_p, L = x_to_xp_L(x, self.n_params)
-        y, weight = y[:, :self.n_params], y[:, self.n_params]
-
         # Loss part 1: Mahalanobis distance
         delta = x_p - y
         q = torch.einsum('bi,bij->bj', delta, L)
@@ -74,7 +81,7 @@ class CorrelatedUncertaintyLoss(fv.nn.Module):
         # Part 2: penalty term for uncertainty/covariances
         loss2 = - 2 * torch.diagonal(torch.log(L), dim1=-2, dim2=-1).sum(-1)
 
-        return ((loss1 + loss2) * weight).mean()
+        return loss1 + loss2
 
 
 @export
