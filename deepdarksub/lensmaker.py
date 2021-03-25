@@ -14,7 +14,7 @@ ls.laconic()
 @export
 @dataclass
 class LensMaker:
-    """Utility for making single lensing images
+    """Utility for making single lensed images
     """
 
     def __init__(self, manada_config=None):
@@ -32,17 +32,9 @@ class LensMaker:
         self.smoothing_sigma = c['source']['parameters']['smoothing_sigma']
 
         self.image_length = self.pixel_width * self.n_pixels
-        self.catalog = manada.Sources.cosmos.COSMOSCatalog(
-            source_parameters=dict(
-                cosmos_folder=mc.cosmos_folder,
-                smoothing_sigma=self.smoothing_sigma,
-                # We're NOT using manada's galaxy sampling here
-                minimum_size_in_pixels=float('nan'),
-                min_apparent_mag=float('nan'),
-                random_rotation=0,
-                min_flux_radius=0,
-                max_z=float('nan')),
-            cosmology_parameters='planck18')
+        self.catalog = c['source']['class'](
+            source_parameters=c['source']['parameters'],
+            cosmology_parameters=c['cosmology']['parameters'])
 
     def subhalo_lenses(self, masses, positions):
         """Return list of (model string, config dict) for subhalo lenses
@@ -74,12 +66,23 @@ class LensMaker:
             lenses.append(subhalo)
         return lenses
 
-    def lensed_image(self, lenses, catalog_i):
+    def lensed_image(self, lenses=None, catalog_i=None):
         """Return numpy array describing lensed image
         :param lenses: list of (lens model name, lens kwargs)
         :param catalog_i: image index from COSMOS catalog
         """
+        if lenses is None:
+            # Do not lens
+            lenses = [('SIS', dict(theta_E=0.))]
+        if catalog_i is None:
+            catalog_i = self.catalog.sample_indices(1)[0]
+
         lens_model_names, lens_kwargs = list(zip(*lenses))
+
+        source_model_class, kwargs_source = self.catalog.draw_source(
+            catalog_i=catalog_i,
+            z_new=self.z_source)
+
         return ls.ImageModel(
                 data_class=ls.ImageData(**ls.data_configure_simple(
                     numPix=self.n_pixels,
@@ -88,41 +91,7 @@ class LensMaker:
                     psf_type='GAUSSIAN',
                     fwhm=self.psf_fwhm),
                 lens_model_class=ls.LensModel_(lens_model_names),
-                source_model_class=ls.LightModel_(['INTERPOL']),
+                source_model_class=ls.LightModel_(source_model_class),
             ).image(
                 kwargs_lens=lens_kwargs,
-                kwargs_source=self.catalog.draw_source(
-                    catalog_i=catalog_i,
-                    z_new=self.z_source)[1])
-
-    # OLD!
-    def select_galaxies(self):
-        c = self.catalog.catalog
-        # Sercic fit succeeded
-        # From readme:
-        #   FIT_STATUS: An array of 5 numbers indicating the status of the fit.  The first of those numbers is
-        #   the status for BULGEFIT, and the last of those 5 numbers is the status for SERSICFIT.  A status of 0
-        #   or 5 indicates failure.
-        fit_ok = ~np.in1d(c['fit_status'][:, -1], [0, 5]) & c['viable_sersic']
-        fit_ok.mean()
-
-        # Size in 128 - 64 pixels
-        size_min = np.minimum(c['size_x'], c['size_y'])
-        size_max = np.maximum(c['size_x'], c['size_y'])
-        size_ok = (64 <= size_min) & (size_max <= 128)
-
-        # Remove photoz outliers
-        photoz_ok = c['zphot'] < 1.8
-
-        # Remove faint galaxies
-        mag_ok = c['mag_auto'] < 22
-
-        all_ok = (fit_ok & size_ok & photoz_ok & mag_ok).astype(np.bool_)
-        print(f'Fit OK: {fit_ok.mean():.5f}\n'
-              f'Size OK: {size_ok.mean():.5f}\n'
-              # f'Signal/noise reasonable: {noise_ok.mean():.5f}\n'
-              f'Photoz OK: {photoz_ok.mean():.5f}\n'
-              f'Magnitude OK: {mag_ok.mean():.5f}\n'
-              f'Select: {all_ok.sum()} images out of {len(all_ok)} ({all_ok.mean():.4f})')
-
-        return np.where(all_ok)[0]
+                kwargs_source=kwargs_source)
