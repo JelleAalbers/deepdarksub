@@ -29,7 +29,6 @@ class LensMaker:
         self.z_source = c['source']['parameters']['z_source']
         self.subhalo_concentration = 15   # TODO: It's more complicated
         self.subhalo_truncation = 5       # TODO: It's more complicated
-        self.smoothing_sigma = c['source']['parameters']['smoothing_sigma']
 
         self.image_length = self.pixel_width * self.n_pixels
         self.catalog = c['source']['class'](

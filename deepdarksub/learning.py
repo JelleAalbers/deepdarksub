@@ -5,6 +5,7 @@ from functools import partial
 import fastai.vision.all as fv
 import numpy as np
 import PIL
+from scipy.ndimage import zoom
 import torch
 
 import deepdarksub as dds
@@ -20,6 +21,15 @@ class NumpyImage(fv.PILImage):
     @classmethod
     def create(cls, fn, **kwargs):
         data = np.load(fn)
+
+        # Tried upsampling to 128, didn't see any benefit
+        # min_size = min(data.shape[:2])
+        # if min_size < 244:
+        #     # Upsample to at least 224x224 (standard for ResNets)?
+        #     # The default is order=3 (cubic spline), which gives noticable
+        #     # distortions.
+        #     data = zoom(data, 244 / min_size, order=1)
+
         # data += cls.noisemaker.noise_on_load(fn, data)
 
         # Assume any overall noise mean is already subtracted,
