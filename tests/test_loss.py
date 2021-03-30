@@ -11,6 +11,8 @@ def loss_numpy(x, y):
     L = np.array([[x_diag_exp[0], 0],
                   [x_nondiag[0], x_diag_exp[1]]])
     delta = x_p - y_p
+    # Same as
+    # loss1 = (L.T @ delta).T @ (L.T @ delta)
     loss1 = (delta @ L) @ (delta @ L)
     loss2 = -2 * x_diag.sum()
     print("Numpy loss: ", loss1, loss2)
@@ -18,26 +20,28 @@ def loss_numpy(x, y):
 
 
 def test_uncertainty_loss():
-    # Random 2-parameter inputs
+    # Random 2-parameter input, training weight of 1
     # TODO: randomize with hypothesis!
-    x, y = np.random.rand(5), np.random.rand(5)
+    x, y = np.random.rand(5), np.random.rand(2)
+    y = np.concatenate([y, [1]])
 
     # Reference computation in numpy
     loss = loss_numpy(x, y)
 
     # Convert to pytorch - do batch size = 1 first
-    xt, yt = torch.Tensor(x).expand(1, 5), torch.Tensor(y).expand(1, 5)
+    xt = torch.Tensor(x).expand(1, len(x))
+    yt = torch.Tensor(y).expand(1, len(y))
 
     # Test batch size = 1
     np.testing.assert_almost_equal(
-        dds.CorrelatedUncertaintyLoss(2)(xt, yt),
+        dds.loss_for(2, 'correlated')(xt, yt),
         loss,
         decimal=3)
 
     # Test with batch size = 42. Loss should be averaged over batch.
-    xt, yt = xt * torch.ones((42, 5)), yt * torch.ones((42, 5))
+    xt, yt = xt * torch.ones((42, 5)), yt * torch.ones((42, 3))
     np.testing.assert_almost_equal(
-        dds.CorrelatedUncertaintyLoss(2)(xt, yt),
+        dds.loss_for(2, 'correlated')(xt, yt),
         loss,
         decimal=3)
 

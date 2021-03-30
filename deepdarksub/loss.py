@@ -25,10 +25,12 @@ class WeightedLoss(fv.nn.Module):
         super().__init__(*args, **kwargs)
 
     def forward(self, x, y):
+        assert y.shape == (x.shape[0], self.n_params + 1)
         y, weight = y[:, :self.n_params], y[:, self.n_params]
         return (weight * self.loss(x, y)).mean()
 
     def loss(self, x, y):
+        assert x.shape == y.shape
         # Mean absolute error
         return torch.mean(torch.abs(x - y), dim=1)
 
@@ -41,6 +43,7 @@ class UncertaintyLoss(WeightedLoss):
     def loss(self, x, y):
         # Split off the actual parameters from uncertainties
         x, x_unc = x[:, :self.n_params], x[:, self.n_params:]
+        assert x.shape == y.shape == x_unc.shape
 
         # Let neural net predict the log2 of the uncertainty.
         # (Maybe bad, but you have to give some meaning to negative values)
@@ -65,12 +68,14 @@ class CorrelatedUncertaintyLoss(WeightedLoss):
     See https://arxiv.org/pdf/1802.07079.pdf (not the sparse part)
     """
 
-    def __init__(self, do_sqrt=False, *args, **kwargs):
+    def __init__(self, *args, do_sqrt=False, **kwargs):
         self.do_sqrt = do_sqrt
         super().__init__(*args, **kwargs)
 
     def loss(self, x, y):
         x_p, L = x_to_xp_L(x, self.n_params)
+        assert x_p.shape == y.shape
+
         # Loss part 1: Mahalanobis distance
         delta = x_p - y
         q = torch.einsum('bi,bij->bj', delta, L)
@@ -119,7 +124,7 @@ def x_to_xp_L(x, n):
     if not isinstance(x, torch.Tensor):
         x = torch.Tensor(x)
     n_batch, n_out = x.shape
-    assert n_out == dds.n_out(n, 'covariance'), "Wrong number of outputs"
+    assert n_out == dds.n_out(n, 'correlated'), "Wrong number of outputs"
 
     # Split off the covariance terms from x
     x_p, x_diag, x_nondiag = x[:, :n], x[:, n:2 * n], x[:, 2 * n:]
