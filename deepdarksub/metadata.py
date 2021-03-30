@@ -44,6 +44,16 @@ def load_metadata(
             * meta['source_z_scaling']
             * manada.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH)
 
+    # Add Sersic fit info
+    _fit_results = lm.catalog.catalog['sersicfit'].astype(np.float)
+    sersic_params = 'intensity r_half n q boxiness x0 y0 phi'.split()
+    sersic_info = {
+        p: _fit_results[:, i]
+        for i, p in enumerate(sersic_params)}
+    for p in sersic_params:
+        meta['source_parameters_sersicfit_' + p] = sersic_info[p][
+            meta['source_parameters_catalog_i'].values.astype(np.int)]
+
     # Galaxy indices
     gis = dict()
     gis['all'] = np.unique(meta['source_parameters_catalog_i'].values.astype(np.int))
