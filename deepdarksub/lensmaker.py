@@ -27,8 +27,11 @@ class LensMaker:
         self.psf_fwhm = c['psf']['parameters']['fwhm']
         self.z_lens = c['main_deflector']['parameters']['z_lens']
         self.z_source = c['source']['parameters']['z_source']
-        self.subhalo_concentration = 15   # TODO: It's more complicated
-        self.subhalo_truncation = 5       # TODO: It's more complicated
+
+        # Subhalo settings from https://arxiv.org/pdf/2009.06639.pdf
+        # TODO: Manada assumptions are more complex
+        self.subhalo_concentration = 15
+        self.subhalo_truncation = 5
 
         self.image_length = self.pixel_width * self.n_pixels
         self.catalog = c['source']['class'](
@@ -52,7 +55,6 @@ class LensMaker:
             # (return values flipped in docstring, fixed in March 2021 lenstronomy)
             r_scale, r_scale_bending = lens_cosmo.nfw_physical2angle(
                 M=m, c=self.subhalo_concentration)
-            print(r_scale, r_scale_bending)
 
             subhalo = ('TNFW', {
                 # Scale radius
@@ -65,21 +67,26 @@ class LensMaker:
             lenses.append(subhalo)
         return lenses
 
-    def lensed_image(self, lenses=None, catalog_i=None):
+    def lensed_image(self, lenses=None, catalog_i=None, phi=None):
         """Return numpy array describing lensed image
         :param lenses: list of (lens model name, lens kwargs)
-        :param catalog_i: image index from COSMOS catalog
+        :param catalog_i: image index from COSMOS catalog,
+            If not provided, choose a random index.
+        :param phi: rotation to apply to the source galaxy.
+            If not provided, choose a random angle or 0,
+            depending on manada's random_rotation option.
         """
         if lenses is None:
             # Do not lens
             lenses = [('SIS', dict(theta_E=0.))]
-        if catalog_i is None:
-            catalog_i = self.catalog.sample_indices(1)[0]
+        catalog_i, phi = \
+            self.catalog.fill_catalog_i_phi_defaults(catalog_i, phi)
 
         lens_model_names, lens_kwargs = list(zip(*lenses))
 
         source_model_class, kwargs_source = self.catalog.draw_source(
             catalog_i=catalog_i,
+            phi=phi,
             z_new=self.z_source)
 
         return ls.ImageModel(
