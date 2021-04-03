@@ -13,6 +13,8 @@ def load_metadata(
         data_dir,
         bad_galaxies=(36412, 53912, 53954),
         val_galaxies=(6233, 10646, 12377, 17214, 25547, 39720, 43660, 51097),
+        val_split='by_galaxy',
+        filename_prefix='image_',
         remove_bad=True):
     """Load manada's metadata from data_dir
 
@@ -27,7 +29,7 @@ def load_metadata(
     if 'index' not in meta:
         # Directly of manada, has not passed through merger script
         meta['index'] = np.arange(len(meta))
-        meta['filename'] = [f'image_{x:07d}.npy' for x in meta['index'].values]
+        meta['filename'] = [f'{filename_prefix}{x:07d}.npy' for x in meta['index'].values]
     meta.set_index('index')
 
     # Add extra columns from the source metadata
@@ -57,27 +59,38 @@ def load_metadata(
     # Galaxy indices
     gis = dict()
     gis['all'] = np.unique(meta['source_parameters_catalog_i'].values.astype(np.int))
-
     gis['bad'] = np.array(bad_galaxies)
     assert all([g in gis['all'] for g in gis['bad']]), "Typo in bad galaxy indices"
     gis['good'] = np.setdiff1d(gis['all'], gis['bad'])
-    gis['val'] = np.array(val_galaxies)
-    assert all([g in gis['all'] for g in gis['val']]), "Typo in val galaxy indices"
-    gis['train'] = np.setdiff1d(gis['good'], gis['val'])
 
     # Remove images with bad source galaxies
     meta['is_bad'] = np.in1d(meta['source_parameters_catalog_i'], gis['bad'])
     if remove_bad:
         meta = meta[~meta['is_bad']]
+    print(f"{len(gis['all'])} distinct source galaxies used by manada. ")
 
-    # Label validation dataset
-    meta['is_val'] = np.in1d(meta['source_parameters_catalog_i'], gis['val'])
+    if val_split == 'by_galaxy':
+        gis['val'] = np.array(val_galaxies)
+        assert all([g in gis['all'] for g in gis['val']]), "Typo in val galaxy indices"
+        gis['train'] = np.setdiff1d(gis['good'], gis['val'])
 
-    print(f"{len(gis['all'])} distinct source galaxies used by manada. "
+        # Label validation dataset
+        meta['is_val'] = np.in1d(meta['source_parameters_catalog_i'], gis['val'])
+
+        print(
           f"Throw away {len(gis['bad'])}, use {len(gis['val'])} for validation, "
-          f"{len(gis['train'])} left for training.\n"
-          f"Total images: {len(meta)}; {len(meta) - meta['is_val'].sum()} for training and "
-          f"{meta['is_val'].sum()} for validation.")
+          f"{len(gis['train'])} left for training.\n")
+
+    elif val_split == 'random':
+        with dds.temp_numpy_seed(42):
+            meta['is_val'] = np.random.rand(len(meta)) < 0.1
+
+    else:
+        raise ValueError("Unrecognized val_split {val_split}")
+
+    print(
+      f"Total images: {len(meta)}; {len(meta) - meta['is_val'].sum()} for training and "
+      f"{meta['is_val'].sum()} for validation.")
 
     # Default to uniform training weights
     if 'training_weight' not in meta.columns:
@@ -88,7 +101,7 @@ def load_metadata(
 
 @export
 def filename_to_index(fn):
-    return int(fn.stem.split('_')[1])
+    return int(fn.stem.split('_')[-1])
 
 
 @export
