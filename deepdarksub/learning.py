@@ -53,25 +53,46 @@ def repeat_color(x):
     return x
 
 
-def _get_y(fn, *, meta, normalizer, fit_parameters):
-    """Return list of desired outputs for image filename fn"""
-    q = dds.meta_for_filename(meta, fn)
-    y = [normalizer.norm(q[p], p) for p in fit_parameters]
-    y += [q.training_weight]
-    return y
-
-
 @export
 def data_block(
         meta, fit_parameters, data_dir,
         uncertainty,
+        class_thresholds=None,
+        mask_dir=None,
         augment_rotation='free',
         rotation_pad_mode='zeros',
         do_repeat_color=False,
         **kwargs):
     """Return datablock for setting up learner"""
     n_params = len(fit_parameters)
-    normalizer = dds.Normalizer(meta, fit_parameters)
+
+    if class_thresholds is not None:
+        # Classification: find bounds
+        # TODO: bit sloppy to put these in global metadata...
+        assert len(fit_parameters) == 1
+        fp = list(fit_parameters.keys())[0]
+        meta['class_index'] = np.searchsorted(
+            class_thresholds,
+            meta[fp].values)
+        out_block = fv.CategoryBlock()
+        get_y = partial(_get_y_classification, meta=meta)
+
+    elif mask_dir is not None:
+        # Segmentation
+        with open(mask_dir / 'codes.txt') as f:
+            codes = f.read().split(', ')
+        out_block = fv.MaskBlock(codes=codes)
+        get_y = partial(_get_y_segmentation, mask_dir=mask_dir)
+
+    else:
+        # Regression
+        normalizer = dds.Normalizer(meta, fit_parameters)
+        out_block = fv.RegressionBlock(
+            n_out=dds.n_out(n_params, uncertainty=uncertainty))
+        get_y = partial(_get_y_regression,
+                        meta=meta,
+                        normalizer=normalizer,
+                        fit_parameters=fit_parameters)
 
     # Rotation augmentation makes fitting x, y, angles, etc. tricky!
     # (would have to figure out how to transform labels...)
@@ -95,16 +116,31 @@ def data_block(
         blocks=(fv.TransformBlock(
                     type_tfms=NumpyImage.create,
                     batch_tfms=[repeat_color] if do_repeat_color else []),
-                fv.RegressionBlock(n_out=dds.n_out(n_params, uncertainty=uncertainty))),
+                out_block),
         get_items=lambda _: tuple([data_dir / fn
                                    for fn in meta['filename'].values.tolist()]),
-        get_y=partial(_get_y,
-                      meta=meta,
-                      normalizer=normalizer,
-                      fit_parameters=fit_parameters),
+        get_y=get_y,
         splitter=fv.FuncSplitter(lambda fn: dds.meta_for_filename(meta, fn).is_val),
         batch_tfms=batch_tfms,
         **kwargs)
+
+
+def _get_y_regression(fn, *, meta, normalizer, fit_parameters):
+    """Return list of desired outputs for image filename fn"""
+    q = dds.meta_for_filename(meta, fn)
+    y = [normalizer.norm(q[p], p) for p in fit_parameters]
+    y += [q.training_weight]
+    return y
+
+
+def _get_y_classification(fn, *, meta):
+    """Returns desired output for image filename fn"""
+    return dds.meta_for_filename(meta, fn).class_index
+
+
+def _get_y_segmentation(fn, *, mask_dir):
+    image_i = dds.filename_to_index(fn)
+    return Path(mask_dir) / f'image_{image_i:07d}.png'
 
 
 @export
