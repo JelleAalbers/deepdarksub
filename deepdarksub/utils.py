@@ -1,8 +1,9 @@
+import collections
 import contextlib
 import importlib.util
 
 import numpy as np
-from scipy import stats
+import pandas as pd
 import torch
 
 
@@ -99,3 +100,39 @@ def linear_fit(x, y):
     slope, intercept = np.polyfit(x, y, deg=1)
     fit = np.poly1d([slope, intercept])
     return fit, (slope, intercept)
+
+
+@export
+def to_str_tuple(x):
+    """Convert a strings or sequence of strings to a tuple of strings"""
+    if isinstance(x, str):
+        return (x,)
+    elif isinstance(x, list):
+        return tuple(x)
+    elif isinstance(x, tuple):
+        return x
+    elif isinstance(x, pd.Series):
+        return tuple(x.values.tolist())
+    elif isinstance(x, np.ndarray):
+        return tuple(x.tolist())
+    raise TypeError(f"Expected string or tuple of strings, got {type(x)}")
+
+
+@export
+def flatten_dict(d, separator='_', keep=tuple(), _parent_key=''):
+    """Flatten nested dictionaries into a single dictionary,
+    indicating levels by separator.
+    Stolen from http://stackoverflow.com/questions/6027558
+    :param keep: key or list of keys whose values should not be flattened.
+    """
+    keep = to_str_tuple(keep)
+    items = []
+    for k, v in d.items():
+        new_key = _parent_key + separator + k if _parent_key else k
+        if isinstance(v, collections.abc.MutableMapping) and k not in keep:
+            items.extend(flatten_dict(v,
+                                      separator=separator,
+                                      _parent_key=new_key).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)

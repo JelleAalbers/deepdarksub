@@ -68,6 +68,12 @@ def plot_image(img,
 
 
 @export
+def show_image(*args, **kwargs):
+    """Alias for plot_image, since I keep mistyping it"""
+    return plot_image(*args, **kwargs)
+
+
+@export
 def r_label(x, y, result_name='',
             c='k', fontsize=8, fit_line_style=None,
             side='right'):
@@ -136,3 +142,24 @@ def log_y(a=None, b=None, scalar_ticks=True, tick_at=None):
         if scalar_ticks:
             ax.yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%g'))
             ax.set_yticks(logticks(a, b, tick_at))
+
+
+@export
+def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
+    """
+    Returns a string representation of the scientific
+    notation of the given number formatted for use with
+    LaTeX or Mathtext, with specified number of significant
+    decimal digits and precision (number of decimal digits
+    to show). The exponent to be used can also be specified
+    explicitly.
+
+    Stolen from https://stackoverflow.com/questions/18311909
+    """
+    if exponent is None:
+        exponent = int(np.floor(np.log10(np.abs(num))))
+    coeff = round(num / float(10 ** exponent), decimal_digits)
+    if precision is None:
+        precision = decimal_digits
+
+    return r"${0:.{2}f}\cdot10^{{{1:d}}}$".format(coeff, exponent, precision)
