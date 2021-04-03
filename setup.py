@@ -14,7 +14,7 @@ setuptools.setup(
     version='0.0.0',
     description='Dark matter substructure inference with ML',
     url='https://github.com/JelleAalbers/deepdarksub',
-    python_requires=">=3.7",
+    python_requires=">=3.6",
     setup_requires=['pytest-runner'],
     install_requires=requires,
     tests_require=['pytest'],

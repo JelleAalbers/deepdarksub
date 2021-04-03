@@ -2,9 +2,7 @@ from dataclasses import dataclass
 
 import astropy
 import lenstronomy as ls
-import numpy as np
 
-import manada
 import deepdarksub as dds
 export, __all__ = dds.exporter()
 
@@ -12,7 +10,6 @@ ls.laconic()
 
 
 @export
-@dataclass
 class LensMaker:
     """Utility for making single lensed images
     """
