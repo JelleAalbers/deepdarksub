@@ -33,28 +33,33 @@ def load_metadata(
     meta.set_index('index')
 
     # Add extra columns from the source metadata
-    lm = dds.LensMaker()   # quick access to cosmo and catalog
-    cosmo = lm.catalog.cosmo
-    cat_meta = lm.catalog.catalog[
-        meta['source_parameters_catalog_i'].values.astype(np.int)]
-    meta['source_z_orig'] = cat_meta['zphot']
-    meta['source_z_scaling'] = (
-            cosmo.angularDiameterDistance(meta['source_z_orig'])
-            / cosmo.angularDiameterDistance(lm.z_source))
-    meta['source_scaled_flux_radius'] = (
-            cat_meta['flux_radius']
-            * meta['source_z_scaling']
-            * manada.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH)
-
-    # Add Sersic fit info
-    _fit_results = lm.catalog.catalog['sersicfit'].astype(np.float)
-    sersic_params = 'intensity r_half n q boxiness x0 y0 phi'.split()
-    sersic_info = {
-        p: _fit_results[:, i]
-        for i, p in enumerate(sersic_params)}
-    for p in sersic_params:
-        meta['source_parameters_sersicfit_' + p] = sersic_info[p][
+    try:
+        lm = dds.LensMaker()   # quick access to cosmo and catalog
+    except FileNotFoundError as e:
+        print(f"Could not load lensmaker, COSMOS dataset missing? "
+              f"Metadata will be incomplete. Original exception: {e}")
+    else:
+        cosmo = lm.catalog.cosmo
+        cat_meta = lm.catalog.catalog[
             meta['source_parameters_catalog_i'].values.astype(np.int)]
+        meta['source_z_orig'] = cat_meta['zphot']
+        meta['source_z_scaling'] = (
+                cosmo.angularDiameterDistance(meta['source_z_orig'])
+                / cosmo.angularDiameterDistance(lm.z_source))
+        meta['source_scaled_flux_radius'] = (
+                cat_meta['flux_radius']
+                * meta['source_z_scaling']
+                * manada.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH)
+
+        # Add Sersic fit info
+        _fit_results = lm.catalog.catalog['sersicfit'].astype(np.float)
+        sersic_params = 'intensity r_half n q boxiness x0 y0 phi'.split()
+        sersic_info = {
+            p: _fit_results[:, i]
+            for i, p in enumerate(sersic_params)}
+        for p in sersic_params:
+            meta['source_parameters_sersicfit_' + p] = sersic_info[p][
+                meta['source_parameters_catalog_i'].values.astype(np.int)]
 
     # Galaxy indices
     gis = dict()
