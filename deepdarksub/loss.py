@@ -17,6 +17,7 @@ def loss_for(n_params, uncertainty, do_sqrt=False):
     else:
         raise ValueError(f"Uncertainty {uncertainty} not recognized")
 
+
 @export
 class WeightedLoss(fv.nn.Module):
 
@@ -32,7 +33,10 @@ class WeightedLoss(fv.nn.Module):
     def loss(self, x, y):
         assert x.shape == y.shape
         # Mean absolute error
-        return torch.mean(torch.abs(x - y), dim=1)
+        # return torch.mean(torch.abs(x - y), dim=1)
+        # RMSE
+        return torch.mean((x - y)**2, dim=1)**0.5
+
 
 @export
 class UncertaintyLoss(WeightedLoss):
