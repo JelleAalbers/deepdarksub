@@ -139,8 +139,7 @@ def _get_y_classification(fn, *, meta):
 
 
 def _get_y_segmentation(fn, *, mask_dir):
-    image_i = dds.filename_to_index(fn)
-    return Path(mask_dir) / f'image_{image_i:07d}.png'
+    return Path(mask_dir) / (fn.stem + '.png')
 
 
 @export

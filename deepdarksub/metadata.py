@@ -9,15 +9,14 @@ export, __all__ = dds.exporter()
 
 def _load_csv(fn, filename_prefix=''):
     meta = pd.read_csv(fn)
-    if 'index' not in meta:
-        # Directly from manada
-        meta['index'] = np.arange(len(meta))
+    if 'filename' not in meta:
+        # Directly from manada: add filename
+        meta['image_number'] = np.arange(len(meta))
         meta['filename'] = [filename_prefix + f'{x:07d}.npy'
-                            for x in meta['index'].values]
-        meta.set_index('index')
-    else:
-        print("Metadata is not directly from manada "
-              "-- loading it as-is")
+                            for x in meta['image_number'].values]
+    meta = meta.sort_values(by='filename')
+    meta = meta.set_index('filename')
+    meta['filename'] = meta.index
     return meta
 
 
@@ -47,12 +46,15 @@ def load_metadata(
         for subdir in sorted(Path(data_dir).glob('*')):
             m = _load_csv(subdir / 'metadata.csv',
                           subdir.stem + '/' + filename_prefix)
-            m['index_in_dir'] = m['index']
             metas.append(m)
-        meta = pd.concat(metas, ignore_index=True)
-        # Ensure we have a simple new index
-        meta['index'] = np.arange(len(meta))
-        meta.set_index('index')
+        # Concatenation seems to remove the filename column
+        # (maybe because it is also the index?)
+        # (ignore_index is worse, that would remove filename completely.)
+        meta = pd.concat(metas)
+#         meta = meta.reset_index()  # Makes filename a regular column again?!
+#         meta = meta.sort_values(by='filename')
+#         meta = meta.set_index('filename')
+#         meta['filename'] = meta.index
 
     # Add extra columns from the source metadata
     try:
@@ -127,10 +129,25 @@ def load_metadata(
 
 
 @export
-def filename_to_index(fn):
-    return int(fn.stem.split('_')[-1])
-
-
-@export
 def meta_for_filename(meta, fn):
-    return meta.loc[filename_to_index(fn)]
+    # TODO: simplify get_items so we don't 
+    # need to do so much here
+    
+    # Do we have a subfolder-based dataset?
+    components = str(fn).split('/')
+    subfolder, image_fn = components[-2:]
+    try:
+        int(subfolder)
+    except:
+        is_subfolder = False
+    else:
+        is_subfolder = True
+        
+    # Build the filename key
+    if is_subfolder:
+        fn = subfolder + '/' + image_fn
+    else:
+        fn = image_fn
+
+    # Assume filename is the index
+    return meta.loc[fn]
