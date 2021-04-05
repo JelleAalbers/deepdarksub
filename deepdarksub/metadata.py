@@ -7,6 +7,19 @@ import deepdarksub as dds
 import manada
 export, __all__ = dds.exporter()
 
+def _load_csv(fn, filename_prefix=''):
+    meta = pd.read_csv(fn)
+    if 'index' not in meta:
+        # Directly from manada
+        meta['index'] = np.arange(len(meta))
+        meta['filename'] = [filename_prefix + f'{x:07d}.npy'
+                            for x in meta['index'].values]
+        meta.set_index('index')
+    else:
+        print("Metadata is not directly from manada "
+              "-- loading it as-is")
+    return meta
+
 
 @export
 def load_metadata(
@@ -25,12 +38,21 @@ def load_metadata(
         metadata DataFrame,
         dict with sets of galaxy indices)
     """
-    meta = pd.read_csv(Path(data_dir) / 'metadata.csv')
-    if 'index' not in meta:
-        # Directly of manada, has not passed through merger script
+    meta_fn = Path(data_dir) / 'metadata.csv'
+    if meta_fn.exists():    
+        meta = _load_csv(meta_fn, filename_prefix)
+    else:
+        # Multi-directory dataset
+        metas = []
+        for subdir in sorted(Path(data_dir).glob('*')):
+            m = _load_csv(subdir / 'metadata.csv',
+                          subdir.stem + '/' + filename_prefix)
+            m['index_in_dir'] = m['index']
+            metas.append(m)
+        meta = pd.concat(metas, ignore_index=True)
+        # Ensure we have a simple new index
         meta['index'] = np.arange(len(meta))
-        meta['filename'] = [f'{filename_prefix}{x:07d}.npy' for x in meta['index'].values]
-    meta.set_index('index')
+        meta.set_index('index')
 
     # Add extra columns from the source metadata
     try:
@@ -45,7 +67,7 @@ def load_metadata(
         meta['source_z_orig'] = cat_meta['zphot']
         meta['source_z_scaling'] = (
                 cosmo.angularDiameterDistance(meta['source_z_orig'])
-                / cosmo.angularDiameterDistance(lm.z_source))
+                / cosmo.angularDiameterDistance(meta['source_parameters_z_source']))
         meta['source_scaled_flux_radius'] = (
                 cat_meta['flux_radius']
                 * meta['source_z_scaling']
