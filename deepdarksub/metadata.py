@@ -7,6 +7,7 @@ import deepdarksub as dds
 import manada
 export, __all__ = dds.exporter()
 
+
 def _load_csv(fn, filename_prefix=''):
     meta = pd.read_csv(fn)
     if 'index' not in meta:
@@ -22,9 +23,26 @@ def _load_csv(fn, filename_prefix=''):
 
 
 @export
+def load_bad_galaxies(filename=Path(__file__).parent / 'bad_galaxies.txt'):
+    bad_indices = []
+    # Load bad galaxies txt file
+    with open(filename) as f:
+        for l in f.readlines():
+            l = l.strip().split('#')[0]
+            if not l:
+                continue
+            try:
+                l = int(l)
+            except:
+                print(f'Strange line, ignored: l')
+            else:
+                bad_indices.append(l)
+    return np.sort(np.array(bad_indices, np.int))
+
+@export
 def load_metadata(
         data_dir,
-        bad_galaxies=(36412, 53912, 53954),
+        bad_galaxies=load_bad_galaxies(),
         val_galaxies=(6233, 10646, 12377, 17214, 25547, 39720, 43660, 51097),
         val_split='by_galaxy',
         filename_prefix='image_',
@@ -34,6 +52,7 @@ def load_metadata(
     :param data_dir: string or Path to manada dataset folder
     :param bad_galaxies: COSMOS catalog indices of galaxies to remove
     :param val_galaxies: COSMOS catalog indices of galaxies to use
+        in the validation set
     :return: (
         metadata DataFrame,
         dict with sets of galaxy indices)
@@ -87,7 +106,6 @@ def load_metadata(
     gis = dict()
     gis['all'] = np.unique(meta['source_parameters_catalog_i'].values.astype(np.int))
     gis['bad'] = np.array(bad_galaxies)
-    assert all([g in gis['all'] for g in gis['bad']]), "Typo in bad galaxy indices"
     gis['good'] = np.setdiff1d(gis['all'], gis['bad'])
 
     # Remove images with bad source galaxies
