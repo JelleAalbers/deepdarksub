@@ -25,6 +25,7 @@
 51303
 52021
 55803
+
 # Disturbing masks
 1368
 1372
@@ -101,6 +102,7 @@
 # Incomplete foreground removal
 10584
 22051
+22365   # Star left in, caused problems in validation set (see April 17)
 23951
 42334
 42582 # Really tiny thing left
@@ -130,4 +132,3 @@
 # 33723
 # 34449
 # 34720 - Dagger?
-
