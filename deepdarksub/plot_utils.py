@@ -74,15 +74,16 @@ def show_image(*args, **kwargs):
 
 
 @export
-def r_label(x, y, result_name='',
+def r_label(x, y, w=None, result_name='',
             c='k', fontsize=8, fit_line_style=None,
+            background_alpha=0.4,
             side='right'):
     if fit_line_style is None:
         fit_line_style = dict()
     fit_line_style = {'c': c, 'alpha': 0.2, 'linestyle': '--',
                       **fit_line_style}
 
-    fit, (slope, intercept) = dds.linear_fit(x, y)
+    fit, (slope, intercept) = dds.linear_fit(x, y, w)
 
     # Plot linear fit, preserving lims
     ylim = plt.ylim()
@@ -90,7 +91,7 @@ def r_label(x, y, result_name='',
     plt.plot(_x, fit(_x), **fit_line_style)
     plt.ylim(*ylim)
 
-    r = stats.pearsonr(x, y)[0]
+    r = dds.weighted_correlation(x, y, w)
     if side == 'left':
         position = dict(x=0.02, y=0.02, ha='left')
     else:
@@ -99,7 +100,7 @@ def r_label(x, y, result_name='',
                 + ("\n" + result_name if result_name else '')),
              c=c, **position,
              va='bottom', transform=plt.gca().transAxes,
-             fontsize=fontsize)
+             fontsize=fontsize).set_bbox(dict(facecolor='w', alpha=background_alpha, linewidth=0))
 
     return r, fit
 

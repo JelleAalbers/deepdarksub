@@ -96,8 +96,26 @@ def cov_to_std(cov):
 
 
 @export
-def linear_fit(x, y):
-    slope, intercept = np.polyfit(x, y, deg=1)
+def weighted_mean(x, w=None):
+    return np.average(x, weights=w)
+
+
+@export
+def weighted_covariance(x, y, w=None):
+    return np.average(  (x - weighted_mean(x, w))
+                      * (y - weighted_mean(y, w)),
+                      weights=w)
+
+
+@export
+def weighted_correlation(x, y, w=None):
+    return weighted_covariance(x, y, w) / np.sqrt(
+        weighted_covariance(x, x, w) * weighted_covariance(y, y, w))
+
+
+@export
+def linear_fit(x, y, w=None):
+    slope, intercept = np.polyfit(x, y, w=w, deg=1)
     fit = np.poly1d([slope, intercept])
     return fit, (slope, intercept)
 
