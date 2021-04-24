@@ -7,13 +7,13 @@ export, __all__ = dds.exporter()
 
 
 @export
-def loss_for(n_params, uncertainty, do_sqrt=False):
+def loss_for(n_params, uncertainty, do_sqrt=False, dummy_unc=False):
     if not uncertainty:
         return WeightedLoss(n_params)
     elif uncertainty == 'diagonal':
         return UncertaintyLoss(n_params)
     elif uncertainty == 'correlated':
-        return CorrelatedUncertaintyLoss(n_params, do_sqrt=do_sqrt)
+        return CorrelatedUncertaintyLoss(n_params, do_sqrt=do_sqrt, dummy_unc=dummy_unc)
     else:
         raise ValueError(f"Uncertainty {uncertainty} not recognized")
 
@@ -72,23 +72,36 @@ class CorrelatedUncertaintyLoss(WeightedLoss):
     See https://arxiv.org/pdf/1802.07079.pdf (not the sparse part)
     """
 
-    def __init__(self, *args, do_sqrt=False, **kwargs):
+    def __init__(self, *args, do_sqrt=False, dummy_unc=False, **kwargs):
         self.do_sqrt = do_sqrt
+        self.dummy_unc = dummy_unc
         super().__init__(*args, **kwargs)
 
     def loss(self, x, y):
-        x_p, L = x_to_xp_L(x, self.n_params)
+        x_p, L = dds.x_to_xp_L(x, self.n_params)
         assert x_p.shape == y.shape
-
+        
+        
+        if self.dummy_unc:
+            # All covariances 0, 1 on diagonal
+            n_batch, n_params = x_p.shape
+            L_dummy = torch.eye(n_params, device=x_p.device).repeat(n_batch, 1, 1)
+    
         # Loss part 1: Mahalanobis distance
         delta = x_p - y
-        q = torch.einsum('bi,bij->bj', delta, L)
+        q = torch.einsum('bi,bij->bj', 
+                         delta, 
+                         L_dummy if self.dummy_unc else L)
         loss1 = torch.einsum('bi,bi->b', q, q)
         if self.do_sqrt:
             loss1 = loss1**0.5
 
         # Part 2: penalty term for uncertainty/covariances
-        loss2 = - 2 * torch.diagonal(torch.log(L), dim1=-2, dim2=-1).sum(-1)
+        if self.dummy_unc:
+            # RMS difference between L and dummy L
+            loss2 = torch.mean((L - L_dummy)**2)**0.5
+        else:
+            loss2 = - 2 * torch.diagonal(torch.log(L), dim1=-2, dim2=-1).sum(-1)
 
         return loss1 + loss2
 
@@ -142,7 +155,7 @@ def x_to_xp_L(x, n):
             ).expand(n_batch, n, n).to(x.device)
         L = torch.zeros(n_batch, n, n).to(x.device)
 
-    L[indices] = x_nondiag.ravel()
+    L[indices] = x_nondiag.reshape(-1)
     L = L + matrix_diag_batched(torch.exp(x_diag))
     return x_p, L
 
