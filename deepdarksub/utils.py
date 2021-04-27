@@ -154,3 +154,14 @@ def flatten_dict(d, separator='_', keep=tuple(), _parent_key=''):
         else:
             items.append((new_key, v))
     return dict(items)
+
+
+@export
+def soft_clip_max(x: torch.Tensor, clip_start):
+    """Return x with values above clip_start sigmoid-suppressed.
+    """
+    # sigmoid(0) = 1/2, sigmoid'(0) = 1/4, so to be smooth at 0...
+    return torch.where(
+        x > clip_start,
+        clip_start + (4 * torch.sigmoid(x - clip_start) - 2),
+        x)
