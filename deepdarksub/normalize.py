@@ -15,8 +15,19 @@ class Normalizer:
         :param fit_parameters: iterable over strings, parameters to fit
         """
         self.fit_parameters = fit_parameters
+
         self.means = {p: np.mean(meta[p]) for p in fit_parameters}
         self.scales = {p: np.std(meta[p]) for p in fit_parameters}
+
+        # Do not scale parameters we have to rotate during augmentation,
+        # so as not to overcomplicate the transforms.
+        # (Fortunately, these are spread in a reasonable range around 0 anyway)
+        for p in ('e1', 'e2',
+                  'gamma1', 'gamma2',
+                  'center_x', 'center_y'):
+            p = 'main_deflector_parameters_' + p
+            self.means[p] = 0
+            self.scales[p] = 1
 
     def norm(self, x, param_name, _reverse=False):
         """Normalize x values representing param_name"""

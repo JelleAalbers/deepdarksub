@@ -1,4 +1,5 @@
 import contextlib
+from immutabledict import immutabledict
 from pathlib import Path
 from functools import partial
 
@@ -53,6 +54,16 @@ def repeat_color(x):
     return x
 
 
+class MyLabel(fv.TensorBase):
+    pass
+
+
+def _rotate_inplace(o, i1, i2, cos, sin):
+    o[:, i1], o[:, i2] = (
+        cos * o[:, i1] - sin * o[:, i2],
+        sin * o[:, i1] + cos * o[:, i2])
+
+
 @export
 def data_block(
         meta, fit_parameters, data_dir,
@@ -89,16 +100,50 @@ def data_block(
         normalizer = dds.Normalizer(meta, fit_parameters)
         out_block = fv.RegressionBlock(
             n_out=dds.n_out(n_params, uncertainty=uncertainty))
+
+        # Use fastai's type-aware monkeypatching to register how
+        # rotations work. Mostly harmless... Just don't try to do more than one
+        # inference at a time with different parameters,
+        # and don't expect unpickling to work nicely....
+
+        _index_of = immutabledict({
+            x: list(fit_parameters.keys()).index(
+                'main_deflector_parameters_' + x)
+            for x in (
+                'e1', 'e2',
+                'gamma1', 'gamma2',
+                'center_x', 'center_y')})
+
+        @fv.Rotate
+        def encodes(self, o: MyLabel, _i=_index_of):
+            assert self.mat.shape[1], self.mat.shape[2] == (2, 3)
+
+            # Checked these are correct with draw=10 in Rotate
+            cos_q, sin_q = self.mat[:, 0, 0], self.mat[:, 0, 1]
+
+            # Ellipticity and shear rotate at double speed
+            sin_2q = 2 * sin_q * cos_q
+            cos_2q = 2 * cos_q**2 - 1
+
+            _rotate_inplace(o, _i['e1'], _i['e2'], cos_2q, sin_2q)
+            _rotate_inplace(o, _i['gamma1'], _i['gamma2'], cos_2q, sin_2q)
+            _rotate_inplace(o, _i['center_x'], _i['center_y'], cos_q, sin_q)
+
+            return o
+
         get_y = partial(_get_y_regression,
                         meta=meta,
                         normalizer=normalizer,
-                        fit_parameters=fit_parameters)
+                        fit_parameters=fit_parameters,
+                        label_class=MyLabel)
 
     # Rotation augmentation makes fitting x, y, angles, etc. tricky!
     # (would have to figure out how to transform labels...)
     batch_tfms = []
     if augment_rotation == 'free':
-        batch_tfms += [fv.Rotate(p=1., max_deg=180, pad_mode=rotation_pad_mode)]
+        batch_tfms += [fv.Rotate(p=1.,
+                                 max_deg=180,
+                                 pad_mode=rotation_pad_mode)]
     elif augment_rotation == 'right':
         # TODO: This doesn't actually randomly rotate along right angles,
         # just draws one batch of rotation angles to use.
@@ -125,12 +170,13 @@ def data_block(
         **kwargs)
 
 
-def _get_y_regression(fn, *, meta, normalizer, fit_parameters):
+def _get_y_regression(fn, *, meta, normalizer, fit_parameters, label_class):
     """Return list of desired outputs for image filename fn"""
     q = dds.meta_for_filename(meta, fn)
+
     y = [normalizer.norm(q[p], p) for p in fit_parameters]
     y += [q.training_weight]
-    return y
+    return label_class(y, fit_parameters=fit_parameters)
 
 
 def _get_y_classification(fn, *, meta):
