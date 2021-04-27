@@ -47,7 +47,7 @@ def test_uncertainty_loss():
 
     # Test against alternate form of loss
     # or equivalently, test decoding into cov matrix
-    _, L = dds.x_to_xp_L(torch.Tensor(x[None,:]), 2)
+    _, L, _ = dds.x_to_xp_L(torch.Tensor(x[None,:]), 2)
     cov = dds.L_to_cov(L)[0]
     inv_cov = np.linalg.inv(cov)
     delta = x[:2] - y[:2]

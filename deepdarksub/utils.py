@@ -165,3 +165,13 @@ def soft_clip_max(x: torch.Tensor, clip_start):
         x > clip_start,
         clip_start + (4 * torch.sigmoid(x - clip_start) - 2),
         x)
+
+
+@export
+def cov_to_std(cov):
+    """Return (std errors, correlation coefficent matrix)
+    given covariance matrix cov
+    """
+    std_errs = np.diag(cov) ** 0.5
+    corr = cov * np.outer(1 / std_errs, 1 / std_errs)
+    return std_errs, corr

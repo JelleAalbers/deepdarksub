@@ -55,7 +55,7 @@ class Normalizer:
             return x_pred, None
         elif uncertainty == 'correlated':
             # Recover covariance matrix
-            _, L = dds.x_to_xp_L(x, n_params)
+            _, L, _ = dds.x_to_xp_L(x, n_params)
             scale_vec = np.array([self.scales[p] for p in self.fit_parameters])
             cov = dds.L_to_cov(L) * np.outer(scale_vec, scale_vec)[None, :, :]
             return x_pred, cov

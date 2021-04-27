@@ -77,7 +77,7 @@ class CorrelatedUncertaintyLoss(WeightedLoss):
         self.soft_loss_max = soft_loss_max
 
     def loss(self, x, y):
-        x_p, L = dds.x_to_xp_L(x, self.n_params)
+        x_p, L, log_diag_L = dds.x_to_xp_L(x, self.n_params)
         assert x_p.shape == y.shape
 
         # Loss part 1: Squared Mahalanobis distance
@@ -85,14 +85,16 @@ class CorrelatedUncertaintyLoss(WeightedLoss):
         q = torch.einsum('bi,bij->bj', delta, L)
         loss1 = torch.einsum('bi,bi->b', q, q)
 
-        # Part 2: penalty for large uncertainties/covariances
-        loss2 = - 2 * torch.diagonal(torch.log(L), dim1=-2, dim2=-1).sum(-1)
+        # Part 2: log determinant of the covariance matrix
+        # Note that for many-parameter fits, these determinants get tiny.
+        # log-ing diag(L) would be less numerically stable,
+        # as L is built via exp.
+        loss2 = - 2 * log_diag_L.sum(-1)
 
         loss = loss1 + loss2
 
-        # Clip the loss (gently, so we can still differentiate)
-        # to avoid insanely high values
-        # (insanely low values are welcome :-)
+        # Clip the loss to avoid insanely high values, common at initialization.
+        # Do it gently, so we can still learn from saturating examples.
         loss = dds.soft_clip_max(loss, self.soft_loss_max)
 
         return loss
@@ -126,7 +128,7 @@ def matrix_diag_batched(diagonal):
 
 @export
 def x_to_xp_L(x, n):
-    """Return (x, L) given net output x
+    """Return (x, L, log(diag(L))) given net output x
     :param x: Neural net output, (n_batch, n_outputs)
     :param n: Number of variables
 
@@ -155,7 +157,7 @@ def x_to_xp_L(x, n):
 
     L[indices] = x_nondiag.reshape(-1)
     L = L + matrix_diag_batched(torch.exp(x_diag))
-    return x_p, L
+    return x_p, L, x_diag
 
 
 @export
