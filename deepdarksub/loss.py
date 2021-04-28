@@ -113,20 +113,6 @@ def n_out(n, uncertainty):
 
 
 @export
-def matrix_diag_batched(diagonal):
-    """Convert batch of vectors to batch of diagonal matrices"""
-    # From https://github.com/pytorch/pytorch/issues/5198#issuecomment-425069863
-    N = diagonal.shape[-1]
-    shape = diagonal.shape[:-1] + (N, N)
-    device, dtype = diagonal.device, diagonal.dtype
-    result = torch.zeros(shape, dtype=dtype, device=device)
-    indices = torch.arange(result.numel(), device=device).reshape(shape)
-    indices = indices.diagonal(dim1=-2, dim2=-1)
-    result.view(-1)[indices] = diagonal
-    return result
-
-
-@export
 def x_to_xp_L(x, n):
     """Return (x, L, log(diag(L))) given net output x
     :param x: Neural net output, (n_batch, n_outputs)
@@ -146,17 +132,15 @@ def x_to_xp_L(x, n):
     # Split off the covariance terms from x
     x_p, x_diag, x_nondiag = x[:, :n], x[:, n:2 * n], x[:, 2 * n:]
 
-    # Find indices for L matrix assignment
-    # See https://discuss.pytorch.org/t/upper-triangular-matrix-vectorization/7040
-    with torch.no_grad():
-        # Indices of off-diagonal lower triangular elements
-        indices = (
-                1 == 1 - torch.triu(torch.ones(n, n))
-            ).expand(n_batch, n, n).to(x.device)
-        L = torch.zeros(n_batch, n, n).to(x.device)
+    # Create diagonal matrices
+    L = torch.diag_embed(torch.exp(x_diag))
 
-    L[indices] = x_nondiag.reshape(-1)
-    L = L + matrix_diag_batched(torch.exp(x_diag))
+    # Get indices of elements below main diagonal
+    row_indices, col_indices = torch.tril_indices(n, n, -1)
+
+    # Add off-diagonal entries in-place
+    L[:, row_indices, col_indices] += x_nondiag
+
     return x_p, L, x_diag
 
 
