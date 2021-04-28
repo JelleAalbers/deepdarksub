@@ -25,10 +25,14 @@ class WeightedLoss(fv.nn.Module):
         self.n_params = n_params
         super().__init__(*args, **kwargs)
 
-    def forward(self, x, y):
+    def forward(self, x, y, reduction='mean'):
         assert y.shape == (x.shape[0], self.n_params + 1)
         y, weight = y[:, :self.n_params], y[:, self.n_params]
-        return (weight * self.loss(x, y)).mean()
+        loss = weight * self.loss(x, y)
+        if reduction == 'mean':
+            return loss.mean()
+        assert reduction == 'none'
+        return loss
 
     def loss(self, x, y):
         assert x.shape == y.shape
