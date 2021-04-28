@@ -19,22 +19,15 @@ class Normalizer:
         self.means = {p: np.mean(meta[p]) for p in fit_parameters}
         self.scales = {p: np.std(meta[p]) for p in fit_parameters}
 
-        # Two-component parameters have to be rotated during augmentation.
-        # To ensure the rotation formulas still work, do not shift means
-        # and use the same scale for both components.
-        # If the prior is symmetric around 0, this is what would have
-        # happened normally anyway.
-        prefix = 'main_deflector_parameters_'
+        # Do not scale parameters we have to rotate during augmentation,
+        # so as not to overcomplicate the transforms.
+        # (Fortunately, these are spread in a reasonable range around 0 anyway)
         for p in ('e1', 'e2',
                   'gamma1', 'gamma2',
                   'center_x', 'center_y'):
-            pname = prefix + p
-            self.means[pname] = 0
-            self.scales[pname] = self.scales[prefix + dict(
-                    e2='e1',
-                    gamma2='gamma1',
-                    center_y='center_x',
-                ).get(p, p)]
+            p = 'main_deflector_parameters_' + p
+            self.means[p] = 0
+            self.scales[p] = 1
 
     def norm(self, x, param_name, _reverse=False):
         """Normalize x values representing param_name"""
