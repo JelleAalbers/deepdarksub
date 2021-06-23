@@ -7,3 +7,4 @@ from .metadata import *
 from .normalize import *
 from .loss import *
 from .learning import *
+from .metrics import *
