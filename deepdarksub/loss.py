@@ -7,13 +7,37 @@ export, __all__ = dds.exporter()
 
 
 @export
-def loss_for(n_params, uncertainty, soft_loss_max=1000):
-    if not uncertainty:
-        return WeightedLoss(n_params)
-    elif uncertainty == 'diagonal':
-        return UncertaintyLoss(n_params)
+def loss_for(fit_parameters, uncertainty, soft_loss_max=1000, 
+             parameter_weights=None,
+             weight_factors=None):
+    n_params = len(fit_parameters)
+    
+    if parameter_weights is None:
+        parameter_weights = dict()
     elif uncertainty == 'correlated':
-        return CorrelatedUncertaintyLoss(n_params, soft_loss_max=soft_loss_max)
+        raise NotImplementedError(
+            "Correlated loss does not support "
+            "parameter weighting (yet)")
+
+    if isinstance(parameter_weights, dict):
+        parameter_weights = [
+            parameter_weights.get(p, 1) 
+            for p in fit_parameters]
+    parameter_weights = torch.Tensor(parameter_weights)
+    
+    if not uncertainty:
+        return WeightedLoss(
+            n_params, 
+            parameter_weights)
+    elif uncertainty == 'diagonal':
+        return UncertaintyLoss(
+            n_params, 
+            parameter_weights)
+    elif uncertainty == 'correlated':
+        return CorrelatedUncertaintyLoss(
+            n_params,
+            parameter_weights,   # Inert
+            soft_loss_max=soft_loss_max)
     else:
         raise ValueError(f"Uncertainty {uncertainty} not recognized")
 
@@ -21,8 +45,13 @@ def loss_for(n_params, uncertainty, soft_loss_max=1000):
 @export
 class WeightedLoss(fv.nn.Module):
 
-    def __init__(self, n_params, *args, **kwargs):
+    def __init__(self, n_params, parameter_weights, *args, **kwargs):
+        assert len(parameter_weights) == n_params
+        # Weights must sum to 1.
+        parameter_weights = parameter_weights / parameter_weights.sum()
+
         self.n_params = n_params
+        self.parameter_weights = parameter_weights
         super().__init__(*args, **kwargs)
 
     def forward(self, x, y, reduction='mean'):
@@ -39,7 +68,8 @@ class WeightedLoss(fv.nn.Module):
         # Mean absolute error
         # return torch.mean(torch.abs(x - y), dim=1)
         # RMSE
-        return torch.mean((x - y)**2, dim=1)**0.5
+        return torch.sum((x - y)**2 * self.parameter_weights[None,:],
+                         dim=1)**0.5
 
 
 @export
