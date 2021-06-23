@@ -81,7 +81,7 @@ def data_block(
         # Classification: find bounds
         # TODO: bit sloppy to put these in global metadata...
         assert len(fit_parameters) == 1
-        fp = list(fit_parameters.keys())[0]
+        fp = list(fit_parameters)[0]
         meta['class_index'] = np.searchsorted(
             class_thresholds,
             meta[fp].values)
@@ -107,7 +107,7 @@ def data_block(
         # and don't expect unpickling to work nicely....
 
         _index_of = immutabledict({
-            x: list(fit_parameters.keys()).index(
+            x: list(fit_parameters).index(
                 'main_deflector_parameters_' + x)
             for x in (
                 'e1', 'e2',
