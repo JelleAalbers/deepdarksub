@@ -15,6 +15,7 @@ class MyMetric:
         self.parameter = parameter
         self.normalizer = normalizer
         self.name = name + '_' + self.suffix
+        self.n_params = len(self.normalizer.fit_parameters)
         
     def make(self):
         def f(x, y):
@@ -22,7 +23,7 @@ class MyMetric:
                 return self._compute(x, y)
             # Metrics shouldn't be able to stop training
             except Exception as e:
-                print("Caught exception in metric!: {e}")
+                print(f"Caught exception in metric!: {e}")
                 return float('nan')
         f.__name__ = self.name
         return AccumMetric(f, to_np=True, flatten=False)
@@ -32,11 +33,11 @@ class MyMetric:
         #  * Fastai uses y_pred, y_true convention
         #  * TODO: Make this work for losses other than diagonal
         y_pred, y_unc = self.normalizer.decode(
-            y_pred[:, :2 * n_params], 
+            y_pred[:, :2 * self.n_params], 
             uncertainty='diagonal',
             as_dict=True)
         y_true, _ = self.normalizer.decode(
-            y_true[:, :n_params], 
+            y_true[:, :self.n_params], 
             as_dict=True)
         y_pred, y_true, y_unc = [
             self.extract_param(y) 
