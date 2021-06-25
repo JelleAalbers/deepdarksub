@@ -75,7 +75,7 @@ class PearsonRMetric(MyMetric):
 @export
 class CorrSSubMetric(MyMetric):
     """Measures correlation of predicted sigma_sub with true [X]"""
-    suffix = 'sigma_su/b_rho'
+    suffix = 'sigma_sub_rho'
     
     # Don't limit to one parameter, we need a cross-correlation
     def extract_param(self, y):

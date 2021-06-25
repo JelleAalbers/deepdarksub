@@ -4,6 +4,7 @@ import contextlib
 from hashlib import sha1
 import importlib.util
 import json
+import subprocess
 
 import numpy as np
 import pandas as pd
@@ -231,3 +232,18 @@ def hashablize(obj):
             raise TypeError("Can't hashablize object of type %r" % type(obj))
     else:
         return obj
+
+
+@export
+def run_command(command, show_output=True):
+    """Run command and show its output in STDOUT"""
+    # Is there no easier way??
+    with subprocess.Popen(
+            command.split(),
+            bufsize=1,
+            universal_newlines=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT) as p:
+        for line in iter(p.stdout.readline, ''):
+            if show_output:
+                print(line.rstrip())
