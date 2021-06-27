@@ -72,7 +72,7 @@ class Normalizer:
             return x_pred, cov
         elif uncertainty == 'diagonal':
             # Recover uncertainty
-            x_unc = np.stack([2 ** x[:, n_params + i] * self.scales[p]
+            x_unc = np.stack([2**x[:, n_params + i] * self.scales[p]
                               for i, p in enumerate(self.fit_parameters)],
                              axis=1)
             if as_dict:
