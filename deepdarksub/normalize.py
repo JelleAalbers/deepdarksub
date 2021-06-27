@@ -9,25 +9,37 @@ export, __all__ = dds.exporter()
 @export
 class Normalizer:
 
-    def __init__(self, meta, fit_parameters):
-        """Initialize scales and offsets from metadata for fit_parameres
-        :param meta: DataFrame with manada metadata
+    def __init__(self, meta=None, fit_parameters=None, means=None, scales=None):
+        """Initialize scales and offsets for fit_parameres
+        :param meta: DataFrame with manada metadata for a dataset (from csv)
         :param fit_parameters: iterable over strings, parameters to fit
+        :param means: means to use, if meta is None
+        :param scales: scales to use, if meta is None
         """
+        if fit_parameters is None:
+            # Should have been a positional argument... backward compatibility
+            raise ValueError("Must specify fit_parameters")
         self.fit_parameters = fit_parameters
 
-        self.means = {p: np.mean(meta[p]) for p in fit_parameters}
-        self.scales = {p: np.std(meta[p]) for p in fit_parameters}
+        if meta is None:
+            assert means is not None, "Provide either meta or means/scales"
+            self.means = means
+            self.scales = scales
 
-        # Do not scale parameters we have to rotate during augmentation,
-        # so as not to overcomplicate the transforms.
-        # (Fortunately, these are spread in a reasonable range around 0 anyway)
-        for p in ('e1', 'e2',
-                  'gamma1', 'gamma2',
-                  'center_x', 'center_y'):
-            p = 'main_deflector_parameters_' + p
-            self.means[p] = 0
-            self.scales[p] = 1
+        else:
+            self.means = {p: np.mean(meta[p]) for p in fit_parameters}
+            self.scales = {p: np.std(meta[p]) for p in fit_parameters}
+
+            # Do not scale parameters we have to rotate during augmentation,
+            # so as not to overcomplicate the transforms.
+            # (Fortunately, these parametersare spread in a reasonable range
+            #  around 0 anyway)
+            for p in ('e1', 'e2',
+                    'gamma1', 'gamma2',
+                    'center_x', 'center_y'):
+                p = 'main_deflector_parameters_' + p
+                self.means[p] = 0
+                self.scales[p] = 1
 
     def norm(self, x, param_name, _reverse=False):
         """Normalize x values representing param_name"""
@@ -43,7 +55,10 @@ class Normalizer:
     def decode(self, x, uncertainty=False, as_dict=True):
         """Return (prediction, uncertainty) given neural net output x
         :param x: torch Tensor (n_images, n_outputs)
-        :param uncertainty: which uncertainty scheme was used;
+        :param uncertainty: depends on which uncertainty scheme was used;
+         - None: will be None
+         - diagonal: (dict with) standard deviation for each parameter
+         - correlated: covariance matrix (never as dict)
 
         """
         if isinstance(x, torch.Tensor):

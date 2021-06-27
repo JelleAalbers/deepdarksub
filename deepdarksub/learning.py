@@ -196,6 +196,6 @@ def predict_many(learn, normalizer, filenames,
     if isinstance(filenames, (str, Path)):
         filenames = [filenames]
     dl = learn.dls.test_dl(filenames, **kwargs)
-    with (contextlib.nullcontext() if progress else learn.no_bar()):
+    with contextlib.nullcontext() if progress else learn.no_bar():
         preds = learn.get_preds(dl=dl)[0]
     return normalizer.decode(preds, uncertainty=uncertainty)

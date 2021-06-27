@@ -61,13 +61,24 @@ def temp_numpy_seed(seed):
 
 
 @export
-def load_py_file(path, module_name):
-    """Load .py file from path, return as a module named module_name"""
-    # From https://stackoverflow.com/questions/67631
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def load_py_file(path, module_name=None):
+    """Load .py file from path.
+
+    If module_name given, import as a module named module_name;
+    otherwise, exec and return the locals dictionary.
+    """
+    if module_name is None:
+        with open(path) as f:
+            code = compile(f.read(), path, 'exec')
+        captured_locals = dict()
+        exec(code, globals(), captured_locals)
+        return captured_locals
+    else:
+        # From https://stackoverflow.com/questions/67631
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
 
 @export
