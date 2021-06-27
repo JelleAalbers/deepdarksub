@@ -1,5 +1,6 @@
 import builtins
 from pathlib import Path
+import os.path as osp
 
 import numpy as np
 import pandas as pd
@@ -84,6 +85,8 @@ def load_metadata(
         # Multi-directory dataset
         metas = []
         for subdir in sorted(Path(data_dir).glob('*')):
+            if not osp.isdir(str(subdir)):
+                continue
             m = _load_csv(subdir / 'metadata.csv',
                           subdir.stem + '/' + filename_prefix)
             metas.append(m)
