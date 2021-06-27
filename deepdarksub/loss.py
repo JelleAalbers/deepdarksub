@@ -23,7 +23,7 @@ def loss_for(fit_parameters, uncertainty, soft_loss_max=1000,
         parameter_weights = [
             parameter_weights.get(p, 1) 
             for p in fit_parameters]
-    parameter_weights = torch.Tensor(parameter_weights)
+    parameter_weights = torch.Tensor(parameter_weights).cuda()
     
     if not uncertainty:
         return WeightedLoss(
@@ -88,13 +88,18 @@ class UncertaintyLoss(WeightedLoss):
         x_unc = 2 ** x_unc
 
         # Part 1: abs error / uncertainty
-        loss = (torch.abs(x - y) / x_unc).mean(axis=1)
+        loss = torch.sum(
+            ((x - y) / x_unc)**2
+                * self.parameter_weights[None,:],
+            dim=1)
 
         # Part 2: uncertainty
         #    Not sure how to weight these
         #    0.5, 1: seem OK both
         #    0.2: errors just stay at 1
-        loss += x_unc.mean(axis=1)
+        loss += 2 * torch.sum(
+            torch.log(x_unc) * self.parameter_weights[None,:],
+            dim=1)
 
         return loss
 
