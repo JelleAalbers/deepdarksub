@@ -1,6 +1,6 @@
 import builtins
 import contextlib
-import datetime
+from datetime import datetime
 import json
 from pathlib import Path
 from re import X
@@ -202,7 +202,7 @@ class Model:
                             for x in self.learner.recorder.losses],
             # only last epoch duration is recorded... oh well
             epoch_duration = self.learner.recorder.log[-1],
-            n_images = len(self.meta),
+            n_images = len(self.metadata),
             train_config=self.train_config)
         # Store normalizer config, so we can use the model on other datasets
         out.update(dict(
@@ -210,10 +210,10 @@ class Model:
             normalizer_scales=self.normalizer.scales))
 
         with open(model_dir / (result_name + '.json'), mode='w') as f:
-            json.dump(out, f)
+            json.dump(out, f, cls=dds.NumpyJSONEncoder)
 
         self.learner.save(result_name)
-
+        return result_name
 
 
 @export
