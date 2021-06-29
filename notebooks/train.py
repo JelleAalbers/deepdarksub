@@ -13,6 +13,9 @@ parser.add_argument(
 parser.add_argument(
     '--uncertainty', default='diagonal',
     help='Kind of uncertainty the net should output: diagonal or correlated')
+parser.add_argument(
+    '--architecture', default='xse_resnet18',
+    help='Kind of uncertainty the net should output: diagonal or correlated')
 args = parser.parse_args()
 
 
@@ -52,7 +55,7 @@ train_config = dict(
     # },
     
     n_epochs = args.epochs,
-    architecture = 'xse_resnet18',
+    architecture = args.architecture,
     bn_final = True,
     base_lr = 0.1)
 
