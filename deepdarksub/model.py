@@ -92,6 +92,7 @@ class Model:
 
         # Setting these up will take a while; looks like it's loading the entire
         # dataset in RAM? I'm probably butchering the fastai dataloader API...
+        print("Setting up data block and data loaders, could take a while")
         self.data_block = dds.data_block(
             self.metadata,
             fit_parameters=tc['fit_parameters'],
@@ -102,11 +103,11 @@ class Model:
                                                         bs=tc['batch_size'])
         print("Dataloaders initialized")
 
-        if tc['uncertainty'] == 'diagonal':
-            self.metrics = dds.all_metrics(
-                self.fit_parameters, self.normalizer, self.short_names)
-        else:
-            print("Training metrics require diagonal uncertainty (for now)")
+        self.metrics = dds.all_metrics(
+            self.fit_parameters,
+            self.normalizer, 
+            self.short_names,
+            self.train_config['uncertainty'])
 
         self.learner = fv.cnn_learner(
             dls=self.data_loaders,
@@ -146,12 +147,13 @@ class Model:
                     dataset='val',
                     as_dict=True,
                     short_names=True):
-        """Return (pred=..., unc=..., true=...) for validation or training data
+        """Return (pred=..., unc=..., true=...) for validation or training data.
 
         Args:
             dataset: 'train' gets training data predictions, 'val' validation data
             as_dict: If True, ... is a dict of arrays (one per param),
-                otherwise a 2d array (parameter order matches self.fit_parameters)
+                otherwise a 2d array (parameter order matches self.fit_parameters).
+                If the uncertainty is 'correlated'
             short_names: If True, dicts will use short-form parameter names
         """
         preds, targets = self.learner.get_preds(
@@ -161,19 +163,21 @@ class Model:
             preds,
             uncertainty=self.train_config['uncertainty'],
             as_dict=as_dict)
-        y_true, _ = self.normalizer.decode(targets[:,:self.n_params],
-                                        as_dict=as_dict)
+        y_true, _ = self.normalizer.decode(
+            targets[:,:self.n_params],
+            as_dict=as_dict)
+        to_return = [('pred', y_pred), ('true', y_true)]
         return {
-            label: self._shorten_dict(x) if as_dict and short_names else x
-            for label, x in (
-                ('pred', y_pred), ('unc', y_unc), ('true', y_true))}
+            label: self._shorten_dict(x) if as_dict and short_names and isinstance(x, dict)
+                   else x
+            for label, x in to_return}
 
     @staticmethod
     def _shorten_dict(x):
         return {shorten_param_name[pname]: val
                 for pname, val in x.items()}
 
-    def train(self, model_dir='models'):
+    def train(self, model_dir='models', lr_find=True):
         """Train the model according to the configuration, then
         save model (.pth) and training log (.json) in results_dir"""
         # Get a unique name from the current time and configuration,
@@ -184,6 +188,17 @@ class Model:
             + '_' + dds.deterministic_hash(self.train_config))
         print(f"Starting training; results will be saved as {result_name}")
 
+        if lr_find:
+            print("Running lr_find")
+            self.learner.lr_find(show_plot=True)
+            
+            import matplotlib.pyplot as plt
+            Path('./plots').mkdir(exist_ok=True)
+            plt.axvline(self.train_config['base_lr'], color='red', linewidth=1)
+            plot_fname = 'plots/' + result_name + '_lr_find.png'
+            plt.savefig(plot_fname, dpi=200, bbox_inches='tight')
+            print(f"Saved lr_find plot to {plot_fname}")
+        
         self.learner.fit_one_cycle(
             n_epoch=self.train_config['n_epochs'],
             lr_max=self.train_config['base_lr'],
