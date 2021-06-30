@@ -11,9 +11,10 @@ export, __all__ = dds.exporter()
 class MyMetric:
     suffix = str
     
-    def __init__(self, normalizer, parameter, name):
+    def __init__(self, normalizer, parameter, name, uncertainty):
         self.parameter = parameter
         self.normalizer = normalizer
+        self.uncertainty = uncertainty
         self.name = name + '_' + self.suffix
         self.n_params = len(self.normalizer.fit_parameters)
         
@@ -31,11 +32,20 @@ class MyMetric:
     def _compute(self, y_pred, y_true):
         # Unnormalize, and split off the uncertainty.
         #  * Fastai uses y_pred, y_true convention
-        #  * TODO: Make this work for losses other than diagonal
-        y_pred, y_unc = self.normalizer.decode(
-            y_pred[:, :2 * self.n_params], 
-            uncertainty='diagonal',
-            as_dict=True)
+
+        if self.uncertainty == 'diagonal':
+            y_pred, y_unc = self.normalizer.decode(
+                y_pred[:, :2 * self.n_params], 
+                uncertainty='diagonal',
+                as_dict=True)
+        else:
+            # Put NaNs for the uncertainty
+            y_pred, _ = self.normalizer.decode(
+                y_pred[:, :self.n_params], 
+                as_dict=True)
+            y_unc = {k: np.nan * v 
+                     for k, v in y_pred.items()}
+
         y_true, _ = self.normalizer.decode(
             y_true[:, :self.n_params], 
             as_dict=True)
@@ -87,8 +97,13 @@ class CorrSSubMetric(MyMetric):
 
 
 @export
-def all_metrics(fit_parameters, normalizer, short_names):
+def all_metrics(fit_parameters, normalizer, short_names, uncertainty):
+    if uncertainty == 'diagonal':
+        metric_classes = (RMSEMetric, UncertaintyMetric, PearsonRMetric, CorrSSubMetric)
+    else:
+        metric_classes = (RMSEMetric, PearsonRMetric, CorrSSubMetric)
+    
     return [
-        f(normalizer, param, short_name).make()
-        for f in [RMSEMetric, UncertaintyMetric, PearsonRMetric, CorrSSubMetric]
+        f(normalizer, param, short_name, uncertainty).make()
+        for f in metric_classes
         for param, short_name in zip(fit_parameters, short_names)]

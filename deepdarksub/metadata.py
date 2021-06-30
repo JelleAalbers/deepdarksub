@@ -149,7 +149,7 @@ def load_metadata(
 
         print(
           f"Throw away {len(gis['bad'])}, use {len(gis['val'])} for validation, "
-          f"{len(gis['train'])} left for training.\n")
+          f"{len(gis['train'])} left for training.")
 
     elif val_split == 'random':
         with dds.temp_numpy_seed(42):
