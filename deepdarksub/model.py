@@ -132,6 +132,7 @@ class Model:
             self.short_names,
             self.train_config['uncertainty'])
 
+        self.dropout_switch = dds.TestTimeDropout()
         self.learner = fv.cnn_learner(
             dls=self.data_loaders,
             arch=getattr(fv, tc['architecture']),
@@ -143,21 +144,30 @@ class Model:
                 parameter_weights=tc.get('parameter_weights')),
             metrics=self.metrics,
             pretrained=False,
+            cbs=[self.dropout_switch],
             bn_final=tc['bn_final'])
 
-    def predict(self, filename, as_dict=True, short_names=True, **kwargs):
+    def predict(self,
+                filename,
+                as_dict=True,
+                short_names=True,
+                with_dropout=False,
+                **kwargs):
         """Return (prediction, uncertainty) for a single image
 
         Args:
             filename: str/Path to npy images
             as_dict: If True, ... returns dicts of floats, else array
             short_names: If True, dicts will use short-form parameter names
+            with_dropout: If True, activate dropout
+                (will partially randomizes prediction)
         """
         pred, unc = self.predict_many(
             [filename],
             progress=False,
             as_dict=as_dict,
             short_names=short_names,
+            with_dropout=with_dropout,
             **kwargs)
         if as_dict:
             # No need to return 1-element arrays, just extract the float
@@ -171,6 +181,7 @@ class Model:
                      progress=True,
                      as_dict=True,
                      short_names=True,
+                     with_dropout=False,
                      **kwargs):
         """Return (predictions, uncertainties) for images in filenames list
 
@@ -179,18 +190,22 @@ class Model:
             progress: if True (default), show a progress bar
             as_dict: If True, ... returns dict of arrays (one per param),
                 otherwise 2d arrays (param order matches self.fit_parameters).
+            with_dropout: If True, activate dropout
+                (will partially randomizes prediction)
         """
         if isinstance(filenames, (str, Path)):
             raise ValueError(
                 "Expected a sequence of filenames; have you seen .predict?")
         filenames = [Path(fn) for fn in filenames]
         dl = self.learner.dls.test_dl(filenames, **kwargs)
-        with contextlib.nullcontext() if progress else self.learner.no_bar():
-            preds = self.learner.get_preds(dl=dl)[0]
+        nullc = contextlib.nullcontext
+        with nullc() if progress else self.learner.no_bar():
+            with self.dropout_switch.active() if with_dropout else nullc():
+                preds = self.learner.get_preds(dl=dl)[0]
         y_pred, y_unc = self.normalizer.decode(
             preds,
             as_dict=as_dict,
-            uncertainty=self.train_config['uncertainty'])
+            uncertainty=self.train_config['uncertainty'],)
         if short_names:
             y_pred = self._shorten_dict(y_pred)
             if isinstance(y_unc, dict):
