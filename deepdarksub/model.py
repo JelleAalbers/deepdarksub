@@ -100,7 +100,7 @@ class Model:
             val_galaxies=tc['val_galaxies'],
             bad_galaxies=tc['bad_galaxies'],
             remove_bad=True,
-            verbose=verbose)
+            verbose=False if test_only else verbose)
         if 'normalizer_means' in tc:
             self.normalizer = dds.Normalizer(
                 fit_parameters=self.fit_parameters,
