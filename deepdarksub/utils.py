@@ -263,13 +263,14 @@ def run_command(command, show_output=True):
 
 @export
 def make_dummy_dataset(dirname='dummy_dataset', n_images=20):
-    """Return Path to dummy dataset with blank images and meaningless
+    """Return Path to dummy dataset with noise images and meaningless
     metadata
     """
     folder = Path(dirname)
     folder.mkdir(exist_ok=True)
     
-    dummy_image = np.zeros((64, 64), dtype=np.float32)
+    dummy_image = np.random.normal(
+        0.2, 0.01, size=(64, 64)).astype(np.float32)
     for i in range(n_images):
         np.save(Path(dirname) / f'image_{i:07d}', dummy_image)
 
