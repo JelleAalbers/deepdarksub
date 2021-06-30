@@ -4,6 +4,7 @@ import contextlib
 from hashlib import sha1
 import importlib.util
 import json
+from pathlib import Path
 import subprocess
 
 import numpy as np
@@ -258,3 +259,38 @@ def run_command(command, show_output=True):
         for line in iter(p.stdout.readline, ''):
             if show_output:
                 print(line.rstrip())
+
+
+@export
+def make_dummy_dataset(dirname='dummy_dataset', n_images=20):
+    """Return Path to dummy dataset with blank images and meaningless
+    metadata
+    """
+    folder = Path(dirname)
+    folder.mkdir(exist_ok=True)
+    
+    dummy_image = np.zeros((64, 64), dtype=np.float32)
+    for i in range(n_images):
+        np.save(Path(dirname) / f'image_{i:07d}', dummy_image)
+
+    dummy_meta = {
+        'main_deflector_parameters_theta_E': 1.,
+        'subhalo_parameters_sigma_sub': 0.1,
+        'los_parameters_delta_los': 0.1,
+        'main_deflector_parameters_center_x': 0.01,
+        'main_deflector_parameters_center_y': 0.01,
+        'main_deflector_parameters_gamma': 2.,
+        'main_deflector_parameters_gamma1': 0.1,
+        'main_deflector_parameters_gamma2': 0.1,
+        'main_deflector_parameters_e1': 0.1,
+        'main_deflector_parameters_e2': 0.1,
+        'source_parameters_z_source': 1.}
+    df = pd.DataFrame(
+        {k: np.random.normal(1., .1, size=n_images) * v
+         for k, v in dummy_meta.items()})
+    df['source_parameters_catalog_i'] = np.random.choice(
+        # 548 is in val_galaxies, 0 is not
+        # This way we will have a train and val dataset.
+        [0, 548], n_images)
+    df.to_csv(Path(dirname) / 'metadata.csv')
+    return folder

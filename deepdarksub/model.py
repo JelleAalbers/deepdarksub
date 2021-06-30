@@ -1,9 +1,9 @@
 import builtins
 import contextlib
-import datetime
+from datetime import datetime
 import json
 from pathlib import Path
-from re import X
+import tempfile
 
 import fastai.vision.all as fv
 import numpy as np
@@ -33,6 +33,16 @@ class Model:
 
     @classmethod
     def from_json(cls, filename, **kwargs):
+        """Build model using configuration from a json
+        metadata file.
+        
+        Args:
+            filename: full path to json
+            **kwargs: any options to override train_config
+                from the json with.
+                
+        To setup pretrained models, you must also load the weights!
+        """
         with open(filename) as f:
             r = json.load(f)
         original_dataset = r['train_config']['dataset_name']
@@ -47,6 +57,7 @@ class Model:
     def __init__(self,
                  verbose=True,
                  base_dir='.',
+                 toy_data=False,
                  **kwargs):
         """Initialize substructure-predicting model
 
@@ -54,6 +65,8 @@ class Model:
             verbose: if True, print messages during initialization
             base_dir: Path to directory containing datasets (each in their
                 own folder). Defaults to current directory.
+            toy_data: if True, initialize with a dummy dataset
+                (2 blank images with meaningless metadata). 
             **kwargs: Configuration options
         """
         self.print = print = builtins.print if verbose else lambda x: x
@@ -62,15 +75,23 @@ class Model:
             val_galaxies = dds.metadata.val_galaxies,
             bad_galaxies = dds.load_bad_galaxies())
         tc.update(**kwargs)
-
-        print(f"Setting up model for dataset {tc['dataset_name']}")
-
-        self.data_dir = Path(base_dir) / tc['dataset_name']
-
+        
         self.fit_parameters = tc['fit_parameters']
         self.n_params = len(self.fit_parameters)
         self.short_names = [shorten_param_name[pname]
                             for pname in self.fit_parameters]
+
+
+        if not toy_data:
+            self.data_dir = Path(base_dir) / tc['dataset_name']
+            if self.data_dir.exists():
+                print(f"Setting up model for dataset {tc['dataset_name']}")
+            else:
+                print(f"{self.data_dir} not found, using toy dataset instead")
+                toy_data = True
+        if toy_data:
+            print(f"Setting up model with meaningless toy data")
+            self.data_dir = dds.make_dummy_dataset()
 
         self.metadata, self.galaxy_indices = dds.load_metadata(
             self.data_dir,
