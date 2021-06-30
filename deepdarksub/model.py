@@ -234,11 +234,12 @@ class Model:
         y_true, _ = self.normalizer.decode(
             targets[:,:self.n_params],
             as_dict=as_dict)
-        to_return = [('pred', y_pred), ('true', y_true)]
         return {
             label: self._shorten_dict(x) if as_dict and short_names and isinstance(x, dict)
                    else x
-            for label, x in to_return}
+            for label, x in [('pred', y_pred),
+                             ('unc', y_unc),
+                             ('true', y_true)]}
 
     @staticmethod
     def _shorten_dict(x):
