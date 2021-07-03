@@ -2,11 +2,29 @@ import manada
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-from scipy import stats
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
 
+__all__.extend(['parameter_colors', 'parameter_labels'])
+
+# Common colors and labels for parameters
+parameter_colors = {
+    'theta_E': 'g',
+    'sigma_sub': 'b',
+    'delta_los': 'darkorange',
+    'center_x': 'magenta', 'center_y': 'magenta',
+    'gamma': 'purple',
+    'e1': 'slateblue', 'e2': 'slateblue',
+    'gamma1': 'saddlebrown', 'gamma2': 'saddlebrown'}
+parameter_labels = {
+    'theta_E': r'$\theta_E$',
+    'sigma_sub': r'$\Sigma_\mathrm{sub}$',
+    'delta_los': r'$\delta_\mathrm{los}$',
+    'center_x': r'$x$', 'center_y': r'$y$',
+    'gamma': r'$\gamma$',
+    'e1': r'$e_1$', 'e2': r'$e_2$',
+    'gamma1': r'$\gamma_1$', 'gamma2': r'$\gamma_2$'}
 
 @export
 def image_grid(

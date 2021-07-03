@@ -11,11 +11,11 @@ import torch
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
-__all__.extend(['shorten_param_name'])
+__all__.extend(['short_names'])
 
 
 mdef = 'main_deflector_parameters_'
-shorten_param_name = dict((
+short_names = dict((
     (mdef + 'theta_E', 'theta_E'),
     ('subhalo_parameters_sigma_sub', 'sigma_sub'),
     ('los_parameters_delta_los', 'delta_los'),
@@ -78,7 +78,7 @@ class Model:
 
         self.fit_parameters = tc['fit_parameters']
         self.n_params = len(self.fit_parameters)
-        self.short_names = [shorten_param_name[pname]
+        self.short_names = [dds.short_names[pname]
                             for pname in self.fit_parameters]
 
         if test_only:
@@ -243,7 +243,7 @@ class Model:
 
     @staticmethod
     def _shorten_dict(x):
-        return {shorten_param_name[pname]: val
+        return {dds.short_names[pname]: val
                 for pname, val in x.items()}
 
     def train(self, model_dir='models', lr_find=True):
