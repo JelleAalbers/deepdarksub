@@ -12,11 +12,11 @@ import torch
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
-__all__.extend(['shorten_param_name'])
+__all__.extend(['short_names'])
 
 
 mdef = 'main_deflector_parameters_'
-shorten_param_name = dict((
+short_names = dict((
     (mdef + 'theta_E', 'theta_E'),
     ('subhalo_parameters_sigma_sub', 'sigma_sub'),
     ('los_parameters_delta_los', 'delta_los'),
@@ -48,7 +48,11 @@ class Model:
             r = json.load(f)
         original_dataset = r['train_config']['dataset_name']
         kwargs = {**r['train_config'], **kwargs}
-        if 'normalizer_means' not in kwargs:
+        if 'normalizer_means' in r:
+            # Oops, should have put these in train_config
+            r['train_config']['normalizer_means'] = r['normalizer_means']
+            r['train_config']['normalizer_scales'] = r['normalizer_scales']
+        elif 'normalizer_means' not in kwargs:
             print("Old json, normalizer settings omitted. Since model was "
                   f"trained for {original_dataset}, assuming its statistics "
                   "for normalization.")
@@ -79,7 +83,7 @@ class Model:
 
         self.fit_parameters = tc['fit_parameters']
         self.n_params = len(self.fit_parameters)
-        self.short_names = [shorten_param_name[pname]
+        self.short_names = [dds.short_names[pname]
                             for pname in self.fit_parameters]
 
         if test_only:
@@ -154,7 +158,7 @@ class Model:
             bn_final=tc['bn_final'])
 
     def predict(self,
-                filename,
+                image,
                 as_dict=True,
                 short_names=True,
                 with_dropout=False,
@@ -162,14 +166,24 @@ class Model:
         """Return (prediction, uncertainty) for a single image
 
         Args:
-            filename: str/Path to npy images
+            image: str/Path to npy image, or numpy array
             as_dict: If True, ... returns dicts of floats, else array
             short_names: If True, dicts will use short-form parameter names
             with_dropout: If True, activate dropout
                 (will partially randomizes prediction)
         """
+        if isinstance(image, np.ndarray):
+            with tempfile.NamedTemporaryFile() as tempf:
+                np.save(tempf, image)
+                return self.predict(
+                    image=tempf.name,
+                    as_dict=as_dict,
+                    short_names=short_names,
+                    with_dropout=with_dropout,
+                    **kwargs)
+
         pred, unc = self.predict_many(
-            [filename],
+            [image],
             progress=False,
             as_dict=as_dict,
             short_names=short_names,
@@ -249,7 +263,7 @@ class Model:
 
     @staticmethod
     def _shorten_dict(x):
-        return {shorten_param_name[pname]: val
+        return {dds.short_names[pname]: val
                 for pname, val in x.items()}
 
     def train(self, model_dir='models', lr_find=True):
@@ -287,12 +301,16 @@ class Model:
         out = dict(zip(
             ['train_loss', 'val_loss', *[f.name for f in self.metrics]],
             np.stack(self.learner.recorder.values).T.tolist()))
+        n_images = len(self.metadata)
+        n_val = self.metadata['is_val'].sum()
         out.update(
             train_loss_hr = [x.numpy().item()
                             for x in self.learner.recorder.losses],
             # only last epoch duration is recorded... oh well
             epoch_duration = self.learner.recorder.log[-1],
-            n_images = len(self.metadata),
+            n_images = n_images,
+            n_validation_images = n_val,
+            n_training_images = n_images - n_val,
             train_config=self.train_config)
         # Store normalizer config, so we can use the model on other datasets
         out.update(dict(
@@ -304,6 +322,33 @@ class Model:
 
         self.learner.save(result_name)
         return result_name
+
+
+@export
+def load_training_log(fn):
+    """Return info from the training log filename fn"""
+    with open(fn) as f:
+        r = json.load(f)
+
+    r['short_names'] = short_names = [
+        dds.short_names[pname]
+        for pname in r['train_config']['fit_parameters']]
+    # Collect training data metrics of the same kind together
+    ms = dict()
+    for metric in 'rmse', 'unc', 'rho', 'sigma_sub_rho':
+        if (r['short_names'][0] + '_' + metric) not in r:
+            continue
+        ms[metric] = {pname: np.array(r[pname + '_' + metric])
+                      for pname in short_names}
+    r['metrics'] = ms
+
+    n_epochs = r['train_config']['n_epochs']
+    # Old logs did not store n_training images;
+    # 0.956 is the training fraction for dl_ss_npy and more_500k.
+    n_training = r.get('n_training_images', r['n_images'] * 0.956)
+    r['training_images_seen'] = np.arange(n_epochs) * n_training / 1e6
+
+    return r
 
 
 @export

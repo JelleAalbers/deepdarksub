@@ -33,3 +33,11 @@ def load_manada_config(x=None):
     return load_py_file(
         str(config_path),
         'manada_config_' + config_name)
+
+
+@export
+def take_config_medians(config):
+    """Replaces distribution.rvs entries with their medians"""
+    return {
+        k: v if not callable(v) else v.__self__.median()
+        for k, v in config.items()}
