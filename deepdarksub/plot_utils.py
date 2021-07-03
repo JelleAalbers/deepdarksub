@@ -124,6 +124,14 @@ def r_label(x, y, w=None, result_name='',
 
 
 @export
+def axis_to_data(x, y, ax=None):
+    if ax is None:
+        ax = plt.gca()
+    return ax.transData.inverted().transform(
+        ax.transAxes.transform((x, y)))
+
+
+@export
 def logticks(tmin, tmax=None, tick_at=None):
     if tick_at is None:
         tick_at = (1, 2, 5, 10)

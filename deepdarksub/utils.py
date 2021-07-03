@@ -268,7 +268,7 @@ def make_dummy_dataset(dirname='dummy_dataset', n_images=20):
     """
     folder = Path(dirname)
     folder.mkdir(exist_ok=True)
-    
+
     dummy_image = np.random.normal(
         0.2, 0.01, size=(64, 64)).astype(np.float32)
     for i in range(n_images):
