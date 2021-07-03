@@ -14,29 +14,75 @@ class LensMaker:
 
     def __init__(self, manada_config=None):
         self.manada_config = mc = dds.load_manada_config(manada_config)
-        c = mc.config_dict
+        c = self.config_dict = mc.config_dict
 
-        # Load parameters we need from manada config
+        # Image dimensions
         self.n_pixels = mc.numpix
         self.pixel_width = c['detector']['parameters']['pixel_scale']
-        self.psf_fwhm = c['psf']['parameters']['fwhm']
+        self.image_length = self.pixel_width * self.n_pixels
+
+        # Redshifts
         self.z_lens = c['main_deflector']['parameters']['z_lens']
         self.z_source = c['source']['parameters']['z_source']
 
-        # Subhalo settings from https://arxiv.org/pdf/2009.06639.pdf
-        # TODO: Manada assumptions are more complex
-        self.subhalo_concentration = 15
-        self.subhalo_truncation = 5
-
-        self.image_length = self.pixel_width * self.n_pixels
+        # Source catalog
         self.catalog = c['source']['class'](
             source_parameters=c['source']['parameters'],
             cosmology_parameters=c['cosmology']['parameters'])
 
-    def subhalo_lenses(self, masses, positions):
+        # Noise maker
+        self.single_band = ls.SingleBand(**c['detector']['parameters'])
+
+    def manada_main_deflector(self, **main_deflector_parameters):
+        """Return list of main deflector lenses (model, kwarg pairs)"""
+        c = self.config_dict
+        main_deflector_parameters = {
+            **dds.take_config_medians(c['main_deflector']['parameters']),
+            **main_deflector_parameters}
+        models = c['main_deflector']['models']
+        return list(zip(
+            models,
+            [{k: v for k, v in main_deflector_parameters.items()
+            if k in ls.ProfileListBase._import_class(model, None).param_names}
+            for model in models]))
+
+    def manada_subhalos(self, sigma_sub=0.1, **main_deflector_parameters):
+        """Return list of subhalo lenses (model, kwargs pairs), metadata dict"""
+        c = self.config_dict
+        subhalo_maker = c['subhalo']['class'](
+			subhalo_parameters={**c['subhalo']['parameters'],
+                                'sigma_sub': sigma_sub},
+            main_deflector_parameters={
+                **dds.take_config_medians(c['main_deflector']['parameters']),
+                **main_deflector_parameters},
+			source_parameters=c['source']['parameters'],
+            cosmology_parameters=c['cosmology']['parameters'])
+
+        # Manada functions generally do not not return metadata,
+        # thus we have to resort to unsavoury means...
+        spy_reports = dict()
+        def spy_upon(object, method_name, alias=None):
+            if alias is None:
+                alias = method_name
+            orig_f = getattr(object, method_name)
+            def spied_f(*args, **kwargs):
+                result = orig_f(*args, **kwargs)
+                spy_reports[alias] = result
+                return result
+            setattr(object, method_name, spied_f)
+        spy_upon(subhalo_maker, 'draw_nfw_masses', 'mass')
+        spy_upon(subhalo_maker, 'mass_concentration', 'concentration')
+
+        sub_model_list, sub_kwargs_list, _ = subhalo_maker.draw_subhalos()
+        return list(zip(sub_model_list, sub_kwargs_list)), spy_reports
+
+    def simple_subhalos(self, masses, positions, concentration=15, truncation=5):
         """Return list of (model string, config dict) for subhalo lenses
         :param masses: list of subhalo masses
         :param positions: list of (x,y) subhalo positions (arcsec, on lens plane)
+
+        Concentration=15, truncation=5 defaults come from
+            https://arxiv.org/pdf/2009.06639.pdf.
         """
         # LensCosmo handles cosmology-dependent parameter conversions
         lens_cosmo = ls.LensCosmo(
@@ -47,9 +93,8 @@ class LensMaker:
         lenses = []
         for m, (x, y) in zip(masses, positions):
             # Convert mass and concentration to lensing parameters
-            # (return values flipped in docstring, fixed in March 2021 lenstronomy)
             r_scale, r_scale_bending = lens_cosmo.nfw_physical2angle(
-                M=m, c=self.subhalo_concentration)
+                M=m, c=concentration)
 
             subhalo = ('TNFW', {
                 # Scale radius
@@ -57,19 +102,24 @@ class LensMaker:
                 # Observed bending angle at scale radius
                 'alpha_Rs': r_scale_bending,
                 # Truncation radius
-                'r_trunc': self.subhalo_truncation * r_scale,
+                'r_trunc': truncation * r_scale,
                 'center_x': x, 'center_y': y})
             lenses.append(subhalo)
         return lenses
 
-    def lensed_image(self, lenses=None, catalog_i=None, phi=None):
+    def lensed_image(self, lenses=None, catalog_i=None, phi=None, noise_seed=42):
         """Return numpy array describing lensed image
-        :param lenses: list of (lens model name, lens kwargs)
-        :param catalog_i: image index from COSMOS catalog,
-            If not provided, choose a random index.
-        :param phi: rotation to apply to the source galaxy.
-            If not provided, choose a random angle or 0,
-            depending on manada's random_rotation option.
+
+        Args:
+            lenses: list of (lens model name, lens kwargs)
+            catalog_i: image index from COSMOS catalog,
+                If not provided, choose a random index.
+            phi: rotation to apply to the source galaxy.
+                If not provided, choose a random angle or 0,
+                depending on manada's random_rotation option.
+            noise_seed: (temporary) seed to use during noise generation.
+                Set to 'random' to generate random noise (does not set seed),
+                set to None to disable noise altogether.
         """
         if lenses is None:
             # Do not lens
@@ -84,15 +134,26 @@ class LensMaker:
             phi=phi,
             z_new=self.z_source)
 
-        return ls.ImageModel(
+        img = ls.ImageModel(
                 data_class=ls.ImageData(**ls.data_configure_simple(
                     numPix=self.n_pixels,
                     deltaPix=self.pixel_width)),
                 psf_class=ls.Data.psf.PSF(
                     psf_type='GAUSSIAN',
-                    fwhm=self.psf_fwhm),
+                    fwhm=self.config_dict['psf']['parameters']['fwhm']),
                 lens_model_class=ls.LensModel_(lens_model_names),
                 source_model_class=ls.LightModel_(source_model_class),
+                kwargs_numerics=self.manada_config.kwargs_numerics,
             ).image(
                 kwargs_lens=lens_kwargs,
                 kwargs_source=kwargs_source)
+
+        if noise_seed == 'random':
+            img += self.single_band.noise_for_model(img)
+        elif noise_seed is not None:
+            with dds.temp_numpy_seed(noise_seed):
+                img += self.single_band.noise_for_model(img)
+        return img
+
+    def show_image(self, img, **kwargs):
+        return dds.show_image(img, pixel_width=self.pixel_width, **kwargs)
