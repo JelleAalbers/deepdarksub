@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 from functools import partial
 from pathlib import Path
-from re import X
+import tempfile
 
 import fastai.vision.all as fv
 import numpy as np
@@ -34,6 +34,16 @@ class Model:
 
     @classmethod
     def from_json(cls, filename, **kwargs):
+        """Build model using configuration from a json
+        metadata file.
+
+        Args:
+            filename: full path to json
+            **kwargs: any options to override train_config
+                from the json with.
+
+        To setup pretrained models, you must also load the weights!
+        """
         with open(filename) as f:
             r = json.load(f)
         original_dataset = r['train_config']['dataset_name']
@@ -48,6 +58,7 @@ class Model:
     def __init__(self,
                  verbose=True,
                  base_dir='.',
+                 test_only=False,
                  **kwargs):
         """Initialize substructure-predicting model
 
@@ -55,6 +66,8 @@ class Model:
             verbose: if True, print messages during initialization
             base_dir: Path to directory containing datasets (each in their
                 own folder). Defaults to current directory.
+            test_only: if True, initialize with a dummy dataset
+                (2 blank images with meaningless metadata).
             **kwargs: Configuration options
         """
         self.print = print = builtins.print if verbose else lambda x: x
@@ -64,21 +77,31 @@ class Model:
             bad_galaxies = dds.load_bad_galaxies())
         tc.update(**kwargs)
 
-        print(f"Setting up model for dataset {tc['dataset_name']}")
-
-        self.data_dir = Path(base_dir) / tc['dataset_name']
-
         self.fit_parameters = tc['fit_parameters']
         self.n_params = len(self.fit_parameters)
         self.short_names = [shorten_param_name[pname]
                             for pname in self.fit_parameters]
+
+        if test_only:
+            print(f"Setting up model with meaningless toy data. You won't be "
+                  "able to train or use predict_all, but you can run predict "
+                  "on new images.")
+            self.data_dir = dds.make_dummy_dataset()
+        else:
+            self.data_dir = Path(base_dir) / tc['dataset_name']
+            if self.data_dir.exists():
+                print(f"Setting up model for dataset {tc['dataset_name']}")
+            else:
+                raise FileNotFoundError(
+                    f"{self.data_dir} not found! Check base dir, or "
+                    "pass test_only = True to setup model for evaluation only.")
 
         self.metadata, self.galaxy_indices = dds.load_metadata(
             self.data_dir,
             val_galaxies=tc['val_galaxies'],
             bad_galaxies=tc['bad_galaxies'],
             remove_bad=True,
-            verbose=verbose)
+            verbose=False if test_only else verbose)
         if 'normalizer_means' in tc:
             self.normalizer = dds.Normalizer(
                 fit_parameters=self.fit_parameters,
@@ -106,14 +129,16 @@ class Model:
 
         self.metrics = dds.all_metrics(
             self.fit_parameters,
-            self.normalizer, 
+            self.normalizer,
             self.short_names,
             self.train_config['uncertainty'])
 
         arch = getattr(fv, tc['architecture'])
         if 'architecture_options' in tc:
             arch = partial(arch, **tc['architecture_options'])
-        
+
+        self.dropout_switch = dds.TestTimeDropout()
+
         self.learner = fv.cnn_learner(
             dls=self.data_loaders,
             arch=arch,
@@ -125,27 +150,72 @@ class Model:
                 parameter_weights=tc.get('parameter_weights')),
             metrics=self.metrics,
             pretrained=False,
+            cbs=[self.dropout_switch],
             bn_final=tc['bn_final'])
+
+    def predict(self,
+                filename,
+                as_dict=True,
+                short_names=True,
+                with_dropout=False,
+                **kwargs):
+        """Return (prediction, uncertainty) for a single image
+
+        Args:
+            filename: str/Path to npy images
+            as_dict: If True, ... returns dicts of floats, else array
+            short_names: If True, dicts will use short-form parameter names
+            with_dropout: If True, activate dropout
+                (will partially randomizes prediction)
+        """
+        pred, unc = self.predict_many(
+            [filename],
+            progress=False,
+            as_dict=as_dict,
+            short_names=short_names,
+            with_dropout=with_dropout,
+            **kwargs)
+        if as_dict:
+            # No need to return 1-element arrays, just extract the float
+            pred = {k: v[0] for k, v in pred.items()}
+            if isinstance(unc, dict):
+                unc = {k: v[0] for k, v in unc.items()}
+        return pred, unc
 
     def predict_many(self,
                      filenames,
                      progress=True,
                      as_dict=True,
                      short_names=True,
+                     with_dropout=False,
                      **kwargs):
         """Return (predictions, uncertainties) for images in filenames list
+
+        Args:
+            filenames: sequence of str/Path to .npy images
+            progress: if True (default), show a progress bar
+            as_dict: If True, ... returns dict of arrays (one per param),
+                otherwise 2d arrays (param order matches self.fit_parameters).
+            with_dropout: If True, activate dropout
+                (will partially randomizes prediction)
         """
         if isinstance(filenames, (str, Path)):
-            filenames = [filenames]
+            raise ValueError(
+                "Expected a sequence of filenames; have you seen .predict?")
+        filenames = [Path(fn) for fn in filenames]
         dl = self.learner.dls.test_dl(filenames, **kwargs)
-        with contextlib.nullcontext() if progress else self.learner.no_bar():
-            preds = self.learner.get_preds(dl=dl)[0]
+        nullc = contextlib.nullcontext
+        with nullc() if progress else self.learner.no_bar():
+            with self.dropout_switch.active() if with_dropout else nullc():
+                preds = self.learner.get_preds(dl=dl)[0]
         y_pred, y_unc = self.normalizer.decode(
             preds,
             as_dict=as_dict,
-            uncertainty=self.train_config['uncertainty'])
+            uncertainty=self.train_config['uncertainty'],)
         if short_names:
-            return self._shorten_dict(y_pred), self._shorten_dict(y_unc)
+            y_pred = self._shorten_dict(y_pred)
+            if isinstance(y_unc, dict):
+                self._shorten_dict(y_unc)
         return y_pred, y_unc
 
     def predict_all(self,
@@ -155,10 +225,9 @@ class Model:
         """Return (pred=..., unc=..., true=...) for validation or training data.
 
         Args:
-            dataset: 'train' gets training data predictions, 'val' validation data
+            dataset: 'train' gets training data results, 'val' validation data
             as_dict: If True, ... is a dict of arrays (one per param),
-                otherwise a 2d array (parameter order matches self.fit_parameters).
-                If the uncertainty is 'correlated'
+                otherwise a 2d array (param order matches self.fit_parameters).
             short_names: If True, dicts will use short-form parameter names
         """
         preds, targets = self.learner.get_preds(
@@ -171,11 +240,12 @@ class Model:
         y_true, _ = self.normalizer.decode(
             targets[:,:self.n_params],
             as_dict=as_dict)
-        to_return = [('pred', y_pred), ('true', y_true)]
         return {
             label: self._shorten_dict(x) if as_dict and short_names and isinstance(x, dict)
                    else x
-            for label, x in to_return}
+            for label, x in [('pred', y_pred),
+                             ('unc', y_unc),
+                             ('true', y_true)]}
 
     @staticmethod
     def _shorten_dict(x):
@@ -196,14 +266,14 @@ class Model:
         if lr_find:
             print("Running lr_find")
             self.learner.lr_find(show_plot=True)
-            
+
             import matplotlib.pyplot as plt
             Path('./plots').mkdir(exist_ok=True)
             plt.axvline(self.train_config['base_lr'], color='red', linewidth=1)
             plot_fname = 'plots/' + result_name + '_lr_find.png'
             plt.savefig(plot_fname, dpi=200, bbox_inches='tight')
             print(f"Saved lr_find plot to {plot_fname}")
-        
+
         self.learner.fit_one_cycle(
             n_epoch=self.train_config['n_epochs'],
             lr_max=self.train_config['base_lr'],

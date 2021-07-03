@@ -94,17 +94,14 @@ def load_metadata(
         # (maybe because it is also the index?)
         # (ignore_index is worse, that would remove filename completely.)
         meta = pd.concat(metas)
-#         meta = meta.reset_index()  # Makes filename a regular column again?!
-#         meta = meta.sort_values(by='filename')
-#         meta = meta.set_index('filename')
-#         meta['filename'] = meta.index
 
     # Add extra columns from the source metadata
     try:
         lm = dds.LensMaker()   # quick access to cosmo and catalog
     except FileNotFoundError as e:
         print(f"Could not load lensmaker, COSMOS dataset missing? "
-              f"Metadata will be incomplete. Original exception: {e}")
+              f"Metadata will lack detailed source galaxy info. "
+              f"Original exception: {e}")
     else:
         cosmo = lm.catalog.cosmo
         cat_meta = lm.catalog.catalog[

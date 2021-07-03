@@ -199,3 +199,33 @@ def predict_many(learn, normalizer, filenames,
     with contextlib.nullcontext() if progress else learn.no_bar():
         preds = learn.get_preds(dl=dl)[0]
     return normalizer.decode(preds, uncertainty=uncertainty)
+
+
+@export
+class TestTimeDropout(fv.Callback):
+    """`Callback` that activates Dropout layers at inference time if _active
+    Adapted from https://forums.fast.ai/t/mc-dropout-in-fastai-v2/68247
+    """
+    _active = False
+
+    @contextlib.contextmanager
+    def active(self):
+        try:
+            self._active = True
+            yield
+        finally:
+            self._active = False
+
+    def before_batch(self):
+        if not self._active:
+            return
+        for mod in self.model.modules():
+            if 'dropout' in mod.__class__.__name__.lower():
+                mod.train()
+
+    def after_batch(self):
+        if self._active:
+            return
+        for mod in self.model.modules():
+            if 'dropout' in mod.__class__.__name__.lower():
+                mod.eval()
