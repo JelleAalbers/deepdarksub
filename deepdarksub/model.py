@@ -194,6 +194,9 @@ class Model:
             pred = {k: v[0] for k, v in pred.items()}
             if isinstance(unc, dict):
                 unc = {k: v[0] for k, v in unc.items()}
+        if isinstance(unc, np.ndarray) and len(unc.shape) == 3:
+            # Remove the batch dimension, we're just predicting one image
+            unc = unc[0]
         return pred, unc
 
     def predict_many(self,
