@@ -27,7 +27,7 @@ parser.add_argument(
     '--lr', default=0.1,
     help='Base learning rate to use')
 parser.add_argument(
-    '--pct_start', default=0.3,
+    '--pct_start', default=0.3, type=float,
     help='Fraction of training to use for warm-up (ascending LR)')
 args = parser.parse_args()
 
