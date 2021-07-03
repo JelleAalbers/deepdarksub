@@ -47,7 +47,11 @@ class Model:
             r = json.load(f)
         original_dataset = r['train_config']['dataset_name']
         kwargs = {**r['train_config'], **kwargs}
-        if 'normalizer_means' not in kwargs:
+        if 'normalizer_means' in r:
+            # Oops, should have put these in train_config
+            r['train_config']['normalizer_means'] = r['normalizer_means']
+            r['train_config']['normalizer_scales'] = r['normalizer_scales']
+        elif 'normalizer_means' not in kwargs:
             print("Old json, normalizer settings omitted. Since model was "
                   f"trained for {original_dataset}, assuming its statistics "
                   "for normalization.")
