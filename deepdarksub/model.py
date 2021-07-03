@@ -2,6 +2,7 @@ import builtins
 import contextlib
 from datetime import datetime
 import json
+from functools import partial
 from pathlib import Path
 from re import X
 
@@ -109,9 +110,13 @@ class Model:
             self.short_names,
             self.train_config['uncertainty'])
 
+        arch = getattr(fv, tc['architecture'])
+        if 'architecture_options' in tc:
+            arch = partial(arch, **tc['architecture_options'])
+        
         self.learner = fv.cnn_learner(
             dls=self.data_loaders,
-            arch=getattr(fv, tc['architecture']),
+            arch=arch,
             n_in=1,
             n_out=dds.n_out(self.n_params, tc['uncertainty']),
             loss_func=dds.loss_for(
