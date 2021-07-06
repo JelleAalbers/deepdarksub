@@ -47,7 +47,6 @@ class Model:
         with open(filename) as f:
             r = json.load(f)
         original_dataset = r['train_config']['dataset_name']
-        kwargs = {**r['train_config'], **kwargs}
         if 'normalizer_means' in r:
             # Oops, should have put these in train_config
             r['train_config']['normalizer_means'] = r['normalizer_means']
@@ -57,6 +56,7 @@ class Model:
                   f"trained for {original_dataset}, assuming its statistics "
                   "for normalization.")
             kwargs.update(normalizer_defaults(original_dataset))
+        kwargs = {**r['train_config'], **kwargs}
         return cls(**kwargs)
 
     def __init__(self,
