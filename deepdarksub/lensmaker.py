@@ -1,6 +1,6 @@
-import astropy
 import lenstronomy as ls
 from manada.Utils.cosmology_utils import get_cosmology
+import numpy as np
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
@@ -170,7 +170,8 @@ class LensMaker:
             lenses.append(subhalo)
         return lenses
 
-    def lensed_image(self, lenses=None, catalog_i=None, phi=None, noise_seed=42):
+    def lensed_image(self, lenses=None, catalog_i=None, phi=None,
+                     noise_seed=42, mask_radius=None):
         """Return numpy array describing lensed image
 
         Args:
@@ -183,6 +184,8 @@ class LensMaker:
             noise_seed: (temporary) seed to use during noise generation.
                 Set to 'random' to generate random noise (does not set seed),
                 set to None to disable noise altogether.
+            mask_radius: arcseconds in the center to zero out.
+                If omitted, follow manada config.
         """
         if lenses is None:
             # Do not lens
@@ -228,6 +231,17 @@ class LensMaker:
         elif noise_seed is not None:
             with dds.temp_numpy_seed(noise_seed):
                 img += self.single_band.noise_for_model(img)
+
+        if mask_radius is None:
+            mask_radius = getattr(self.manada_config, 'mask_radius', None)
+        if mask_radius:
+            x_grid, y_grid = np.meshgrid(*dds.image_grid(
+                    img.shape,
+                    pixel_width=self.pixel_width,
+                    edges=False),
+                indexing='ij')
+            img[(x_grid**2 + y_grid**2) <= mask_radius**2] = 0
+
         return img
 
     def show_image(self, img, **kwargs):

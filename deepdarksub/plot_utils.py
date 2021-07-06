@@ -30,6 +30,7 @@ parameter_labels = {
 def image_grid(
         shape, pixel_width=manada.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH,
         x0=0, y0=0, edges=True):
+    """Return x, y edges/centers of image coordinates"""
     nx, ny = shape
     dx = nx * pixel_width
     dy = nx * pixel_width
