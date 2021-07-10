@@ -208,24 +208,43 @@ class TestTimeDropout(fv.Callback):
     """
     _active = False
 
+    def dropout_modules(self):
+        for mod in self.model.modules():
+            if 'dropout' in mod.__class__.__name__.lower():
+                yield mod
+
     @contextlib.contextmanager
-    def active(self):
+    def active(self, p_mult=1.):
+        if not p_mult:
+            # Do not activate dropout
+            yield
+            return
+        if p_mult is True:
+            p_mult == 1.
+
+        _orig_ps = {mod: mod.p
+                    for mod in self.dropout_modules()}
         try:
             self._active = True
+            for mod in self.dropout_modules():
+                mod.p *= p_mult
             yield
         finally:
             self._active = False
+            for mod in self.dropout_modules():
+                mod.p = _orig_ps[mod]
+
+    # Why not set train / val as part of active?
+    # And if that works, why make a callback at all?
 
     def before_batch(self):
         if not self._active:
             return
-        for mod in self.model.modules():
-            if 'dropout' in mod.__class__.__name__.lower():
-                mod.train()
+        for mod in self.dropout_modules():
+            mod.train()
 
     def after_batch(self):
         if self._active:
             return
-        for mod in self.model.modules():
-            if 'dropout' in mod.__class__.__name__.lower():
-                mod.eval()
+        for mod in self.dropout_modules():
+            mod.eval()

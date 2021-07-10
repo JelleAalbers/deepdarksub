@@ -194,6 +194,8 @@ class Model:
             pred = {k: v[0] for k, v in pred.items()}
             if isinstance(unc, dict):
                 unc = {k: v[0] for k, v in unc.items()}
+        else:
+            pred = pred[0]
         if isinstance(unc, np.ndarray) and len(unc.shape) == 3:
             # Remove the batch dimension, we're just predicting one image
             unc = unc[0]
@@ -223,13 +225,13 @@ class Model:
         dl = self.learner.dls.test_dl(filenames, **kwargs)
         nullc = contextlib.nullcontext
         with nullc() if progress else self.learner.no_bar():
-            with self.dropout_switch.active() if with_dropout else nullc():
+            with self.dropout_switch.active(with_dropout):
                 preds = self.learner.get_preds(dl=dl)[0]
         y_pred, y_unc = self.normalizer.decode(
             preds,
             as_dict=as_dict,
             uncertainty=self.train_config['uncertainty'],)
-        if short_names:
+        if short_names and as_dict:
             y_pred = self._shorten_dict(y_pred)
             if isinstance(y_unc, dict):
                 self._shorten_dict(y_unc)
