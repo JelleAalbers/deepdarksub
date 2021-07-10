@@ -2,6 +2,7 @@ import manada
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from scipy import stats
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
@@ -191,3 +192,54 @@ def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
         precision = decimal_digits
 
     return r"${0:.{2}f}\cdot10^{{{1:d}}}$".format(coeff, exponent, precision)
+
+
+@export
+def confidence_ellipse(
+        mean, cov, ax=None, percentile=50,
+        **kwargs):
+    """Plot and return a covariance confidence ellipse
+
+    Args:
+     - mean: array-like, shape (2,); location of mean
+     - cov: array-like, shape (2, 2), 2d covariance matri
+     - ax: matplotlib.axes.Axes to draw the ellipse into
+     - percentile: Probability mass included in the ellipse;
+        50% by default.
+     - **kwargs forwarded to `~matplotlib.patches.Ellipse`
+
+    Adapted from Carsten Schelp / matplotlib example gallery:
+     - https://matplotlib.org/stable/gallery/statistics/confidence_ellipse.html
+     - https://gist.github.com/CarstenSchelp/b992645537660bda692f218b562d0712
+    """
+    if ax is None:
+        ax = plt.gca()
+    mean = np.asarray(mean)
+    cov = np.asarray(cov)
+    assert mean.shape == (2,)
+    assert cov.shape == (2,2)
+    kwargs.setdefault('edgecolor', 'k')
+    kwargs.setdefault('facecolor', 'none')
+
+    pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
+    # Using a special case to obtain the eigenvalues of this
+    # two-dimensionl dataset.
+    ell_radius_x = np.sqrt(1 + pearson)
+    ell_radius_y = np.sqrt(1 - pearson)
+    ellipse = matplotlib.patches.Ellipse(
+        (0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2,
+        **kwargs)
+
+    # Scale axes to match probability content. See e.g.
+    # https://www.visiondummy.com/2014/04/draw-error-ellipse-representing-covariance-matrix/
+    scale = stats.chi2(df=2).ppf(percentile/100)**0.5
+    scale_x = np.sqrt(cov[0, 0]) * scale
+    scale_y = np.sqrt(cov[1, 1]) * scale
+
+    transf = matplotlib.transforms.Affine2D() \
+        .rotate_deg(45) \
+        .scale(scale_x, scale_y) \
+        .translate(*mean)
+
+    ellipse.set_transform(transf + ax.transData)
+    return ax.add_patch(ellipse)
