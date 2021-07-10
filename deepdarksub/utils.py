@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import subprocess
 
+import numba
 import numpy as np
 import pandas as pd
 import torch
@@ -51,15 +52,37 @@ def sample_1d(f, grid, size=1000):
                      fp=grid)
 
 
+
+@numba.njit
+def set_numba_random_seed(value):
+    np.random.seed(value)
+
+
 @export
 @contextlib.contextmanager
 def temp_numpy_seed(seed):
+    """Temporarily sets the numpy random generator to this seed,
+    then return to previous random state.
+
+    The numba random generator is also reseeded after entering and
+    leaving the fixed-seed context.
+    """
+
     state = np.random.get_state()
     np.random.seed(seed)
+
+    # I don't know how to retrieve the numba seed...
+    # But we can set it:
+    set_numba_random_seed(np.random.randint(np.iinfo(np.uint32).max - 1))
+
     try:
         yield
     finally:
         np.random.set_state(state)
+
+    # Now that we are back in an unknown random state,
+    # seed the numba generator again.
+    set_numba_random_seed(np.random.randint(np.iinfo(np.uint32).max - 1))
 
 
 @export
