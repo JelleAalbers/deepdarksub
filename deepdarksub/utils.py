@@ -271,7 +271,7 @@ def hashablize(obj):
 
 @export
 def run_command(command, show_output=True):
-    """Run command and show its output in STDOUT"""
+    """Run command, return output and show in STDOUT"""
     # Is there no easier way??
     with subprocess.Popen(
             command.split(),
@@ -279,9 +279,13 @@ def run_command(command, show_output=True):
             universal_newlines=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT) as p:
+        result = []
         for line in iter(p.stdout.readline, ''):
+            line = line.rstrip()
+            result.append(line)
             if show_output:
-                print(line.rstrip())
+                print(line)
+        return '\n'.join(result)
 
 
 @export
