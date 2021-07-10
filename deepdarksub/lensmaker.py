@@ -1,6 +1,7 @@
 import lenstronomy as ls
 from manada.Utils.cosmology_utils import get_cosmology
 import numpy as np
+import pandas as pd
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
@@ -84,6 +85,41 @@ class LensMaker:
             zs = None
         return model_list, kwargs_list, zs
 
+    def manada_substructure(self,
+            sigma_sub=0.1,
+            delta_los=1.,
+            los_mode='subtract_average',
+            **main_deflector_parameters):
+        """Return (list of subhalo lenses, dataframe with metadata)
+
+        See manada_los and manada_subhalos for arguments
+        """
+        los_lenses, los_meta = self.manada_los(
+            delta_los=delta_los, mode=los_mode, **main_deflector_parameters)
+        subhalo_lenses, subhalo_meta = self.manada_subhalos(
+            sigma_sub=sigma_sub, **main_deflector_parameters)
+
+        # Collect subhalo metadata
+        df_sub = pd.DataFrame([l[1] for l in subhalo_lenses])
+        df_sub['m'] = subhalo_meta['mass'][0][2]
+        df_sub['c'] = subhalo_meta['concentration'][0][2]
+        df_sub['z'] = self.z_lens
+
+        # Collect LOS metadata
+        _from_los = []
+        for args, _, result in los_meta['concentration']:
+            masses = args[1]
+            if not isinstance(masses, np.ndarray):
+                # Some c_average call
+                continue
+            for m, c in zip(masses, result):
+                _from_los.append(dict(m=m, c=c))
+                _from_los[-1].update(los_lenses[len(_from_los) - 1][1])
+
+        return (
+            (subhalo_lenses + los_lenses),
+            pd.concat([df_sub, pd.DataFrame(_from_los)]).reset_index(drop=True))
+
     def manada_los(self,
                    delta_los=1.,
                    mode='subtract_average',
@@ -104,13 +140,21 @@ class LensMaker:
             los_parameters={**c['los']['parameters'],
                             **dict(delta_los=delta_los)},
 			**self._common_substructure_kwargs(main_deflector_parameters))
+
+        # Steal mass/concentration info from manada...
+        spy_reports = dict()
+        dds.spy_on_method(los_maker, 'draw_nfw_masses',
+                          spy_reports, 'mass')
+        dds.spy_on_method(los_maker, 'mass_concentration',
+                          spy_reports, 'concentration')
+
         result = []
         if mode in ['halos', 'subtract_average']:
             result.append(los_maker.draw_los())
         if mode in ['average_only', 'subtract_average']:
             # TODO: ask Sebastian about * 2 here
             result.append(los_maker.calculate_average_alpha(self.n_pixels * 2))
-        return sum([self._to_lens_list(*x) for x in result], [])
+        return sum([self._to_lens_list(*x) for x in result], []), spy_reports
 
     def manada_subhalos(self,
                         sigma_sub=0.1,
@@ -122,19 +166,12 @@ class LensMaker:
                                 'sigma_sub': sigma_sub},
             **self._common_substructure_kwargs(main_deflector_parameters))
 
-        # Steal some extra metadata from manada...
+        # Steal mass/concentration info from manada...
         spy_reports = dict()
-        def spy_upon(object, method_name, alias=None):
-            if alias is None:
-                alias = method_name
-            orig_f = getattr(object, method_name)
-            def spied_f(*args, **kwargs):
-                result = orig_f(*args, **kwargs)
-                spy_reports[alias] = result
-                return result
-            setattr(object, method_name, spied_f)
-        spy_upon(subhalo_maker, 'draw_nfw_masses', 'mass')
-        spy_upon(subhalo_maker, 'mass_concentration', 'concentration')
+        dds.spy_on_method(subhalo_maker, 'draw_nfw_masses',
+                          spy_reports, 'mass')
+        dds.spy_on_method(subhalo_maker, 'mass_concentration',
+                          spy_reports, 'concentration')
 
         sub_model_list, sub_kwargs_list, _ = subhalo_maker.draw_subhalos()
         return self._to_lens_list(sub_model_list, sub_kwargs_list), spy_reports
@@ -154,6 +191,7 @@ class LensMaker:
             cosmo=self.astropy_cosmology)
 
         lenses = []
+        meta = []
         for m, (x, y) in zip(masses, positions):
             # Convert mass and concentration to lensing parameters
             r_scale, r_scale_bending = lens_cosmo.nfw_physical2angle(
@@ -167,8 +205,10 @@ class LensMaker:
                 # Truncation radius
                 'r_trunc': truncation * r_scale,
                 'center_x': x, 'center_y': y})
+            meta.append(subhalo[1])
+            meta[-1].update(m=m, c=concentration)
             lenses.append(subhalo)
-        return lenses
+        return lenses, pd.Dataframe(meta)
 
     def lensed_image(self, lenses=None, catalog_i=None, phi=None,
                      noise_seed=42, mask_radius=None):
@@ -212,13 +252,17 @@ class LensMaker:
             z_new=self.z_source)
 
         img = ls.ImageModel(
-                # These arguments are called '...class', but expect instances!
+                # Several arguments are called '...class', but expect instances!
                 data_class=ls.ImageData(**ls.data_configure_simple(
                     numPix=self.n_pixels,
                     deltaPix=self.pixel_width)),
+                # Manada instead uses:
+                # data_class=ls.DataAPI(
+                #     numpix=self.n_pixels,
+                #     **self.config_dict['detector']['parameters']).data_class,
+                # Is there a difference?
                 psf_class=ls.Data.psf.PSF(
-                    psf_type='GAUSSIAN',
-                    fwhm=self.config_dict['psf']['parameters']['fwhm']),
+                    **self.config_dict['psf']['parameters']),
                 lens_model_class=lens_model,
                 source_model_class=ls.LightModel_(source_model_class),
                 kwargs_numerics=self.manada_config.kwargs_numerics,

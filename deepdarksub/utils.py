@@ -318,3 +318,20 @@ def make_dummy_dataset(dirname='dummy_dataset', n_images=20):
         [0, 548], n_images)
     df.to_csv(Path(dirname) / 'metadata.csv')
     return folder
+
+
+@export
+def spy_on_method(object, method_name, results_dict, alias):
+    """Monkeypatches object.method_name so that each call will append
+    (args, kwargs, result) to results_dict[alias]
+    """
+    if alias is None:
+        alias = method_name
+    results_dict.setdefault(alias, [])
+    orig_f = getattr(object, method_name)
+    def spied_f(*args, **kwargs):
+        result = orig_f(*args, **kwargs)
+        results_dict[alias].append((args, kwargs, result))
+        return result
+    setattr(object, method_name, spied_f)
+
