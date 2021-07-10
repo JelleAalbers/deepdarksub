@@ -101,7 +101,7 @@ for job_i in range(n_jobs):
     #SBATCH --ntasks=1
     #SBATCH --cpus-per-task=1
     #SBATCH --mem-per-cpu=1g
-    #SBATCH --time=1:00:00
+    #SBATCH --time=2:30:00
 
     export PATH={conda_prefix}/bin/:$PATH
     source {conda_prefix}/etc/profile.d/conda.sh
