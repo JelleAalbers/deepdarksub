@@ -7,11 +7,11 @@ export, __all__ = dds.exporter()
 
 
 @export
-def loss_for(fit_parameters, uncertainty, soft_loss_max=1000, 
-             parameter_weights=None,
-             weight_factors=None):
+def loss_for(fit_parameters, uncertainty, soft_loss_max=1000,
+             truncate_final=False,
+             parameter_weights=None):
     n_params = len(fit_parameters)
-    
+
     if parameter_weights is None:
         parameter_weights = dict()
     elif uncertainty == 'correlated':
@@ -21,22 +21,25 @@ def loss_for(fit_parameters, uncertainty, soft_loss_max=1000,
 
     if isinstance(parameter_weights, dict):
         parameter_weights = [
-            parameter_weights.get(p, 1) 
+            parameter_weights.get(p, 1)
             for p in fit_parameters]
     parameter_weights = torch.Tensor(parameter_weights).cuda()
-    
+
     if not uncertainty:
         return WeightedLoss(
-            n_params, 
-            parameter_weights)
+            n_params,
+            parameter_weights,
+            truncate_final=truncate_final)
     elif uncertainty == 'diagonal':
         return UncertaintyLoss(
-            n_params, 
-            parameter_weights)
+            n_params,
+            parameter_weights,
+            truncate_final=truncate_final)
     elif uncertainty == 'correlated':
         return CorrelatedUncertaintyLoss(
             n_params,
             parameter_weights,   # Inert
+            truncate_final=truncate_final,
             soft_loss_max=soft_loss_max)
     else:
         raise ValueError(f"Uncertainty {uncertainty} not recognized")
@@ -45,13 +48,15 @@ def loss_for(fit_parameters, uncertainty, soft_loss_max=1000,
 @export
 class WeightedLoss(fv.nn.Module):
 
-    def __init__(self, n_params, parameter_weights, *args, **kwargs):
-        assert len(parameter_weights) == n_params
-        # Weights must sum to 1.
-        parameter_weights = parameter_weights / parameter_weights.sum()
-
+    def __init__(self, n_params, parameter_weights, *args,
+                 truncate_final=False,
+                 **kwargs):
         self.n_params = n_params
+        assert len(parameter_weights) == n_params
+        # Force weights to sum to one
+        parameter_weights = parameter_weights / parameter_weights.sum()
         self.parameter_weights = parameter_weights
+        self.truncate_final = truncate_final
         super().__init__(*args, **kwargs)
 
     def forward(self, x, y, reduction='mean'):
@@ -63,13 +68,28 @@ class WeightedLoss(fv.nn.Module):
         assert reduction == 'none'
         return loss
 
+    def truncation_term(self, mean, std=1):
+        """Return term to be added to -2 log L loss for truncating the
+        estimated posterior of a fit_parameter with to non-negative values.
+
+        Args:
+         - mean: Predicted mean
+         - std: Predicted std
+        """
+        if not self.truncate_final:
+            return 0.
+        # 1 - Normal(mean,std).CDF(0)
+        f_above = 1 - 0.5 * (1 + torch.erf(- mean/(std * 2**0.5)))
+        print(f"{f_above=}, {std=} in torch")
+        # -2 log (1/f_above) = 2 log f_above
+        return 2 * torch.log(f_above)
+
     def loss(self, x, y):
         assert x.shape == y.shape
-        # Mean absolute error
-        # return torch.mean(torch.abs(x - y), dim=1)
-        # RMSE
-        return torch.sum((x - y)**2 * self.parameter_weights[None,:],
-                         dim=1)**0.5
+        return (
+            torch.sum((x - y)**2 * self.parameter_weights[None,:],
+                      dim=1)
+            + self.truncation_term(mean=x[:,-1]))
 
 
 @export
@@ -83,23 +103,22 @@ class UncertaintyLoss(WeightedLoss):
         x, x_unc = x[:, :self.n_params], x[:, self.n_params:]
         assert x.shape == y.shape == x_unc.shape
 
-        # Let neural net predict the log2 of the uncertainty.
+        # Let neural net predict the log2 of the (std) uncertainty.
         # (Maybe bad, but you have to give some meaning to negative values)
         x_unc = 2 ** x_unc
 
-        # Part 1: abs error / uncertainty
+        # Part 1: squared Mahalanobis distance (assuming no correlations)
         loss = torch.sum(
             ((x - y) / x_unc)**2
                 * self.parameter_weights[None,:],
             dim=1)
 
-        # Part 2: uncertainty
-        #    Not sure how to weight these
-        #    0.5, 1: seem OK both
-        #    0.2: errors just stay at 1
-        loss += 2 * torch.sum(
+        # Part 2: -2 log(det_of_cov**-0.5) = sum log x_unc (no 2!)
+        loss += torch.sum(
             torch.log(x_unc) * self.parameter_weights[None,:],
             dim=1)
+
+        loss += self.truncation_term(mean=x[:,-1], std=x_unc[:,-1])
 
         return loss
 
@@ -124,13 +143,19 @@ class CorrelatedUncertaintyLoss(WeightedLoss):
         q = torch.einsum('bi,bij->bj', delta, L)
         loss1 = torch.einsum('bi,bi->b', q, q)
 
-        # Part 2: log determinant of the covariance matrix
+        # Part 2: -2 log(det_of_cov**-0.5) = log det_of_cov = -2 sum log diag(L)
+        # (since cov = (L L^T)^-1 and L is lower triangular)
         # Note that for many-parameter fits, these determinants get tiny.
         # log-ing diag(L) would be less numerically stable,
         # as L is built via exp.
         loss2 = - 2 * log_diag_L.sum(-1)
 
         loss = loss1 + loss2
+        # 1/L[-1,-1] equals the standard deviation on the final parameter.
+        # See https://math.stackexchange.com/a/3211183, or just try it out:
+        #   L = np.tril(np.random.rand(13,13))
+        #   L[-1, -1]**-1, dds.cov_to_std(dds.L_to_cov(L))[0][-1]
+        loss += self.truncation_term(mean=x_p[:, -1], std=L[:, -1, -1]**-1)
 
         # Clip the loss to avoid insanely high values, common at initialization.
         # Do it gently, so we can still learn from saturating examples.
@@ -153,19 +178,19 @@ def n_out(n, uncertainty):
 
 @export
 def x_to_xp_L(x, n):
-    """Return (x, L, log(diag(L))) given net output x
+    """Return (x, L, ln(diag(L))) given net output x
     :param x: Neural net output, (n_batch, n_outputs)
     :param n: Number of variables
 
-    Net predicts (
+    Note that the net predicts: (
         point estimates,
         ln of diagonal entries of L,
-        off-diagonal entries of L
+        off-diagonal entries of L (flattened)
     )
     """
     if not isinstance(x, torch.Tensor):
         x = torch.Tensor(x)
-    n_batch, n_out = x.shape
+    _, n_out = x.shape
     assert n_out == dds.n_out(n, 'correlated'), "Wrong number of outputs"
 
     # Split off the covariance terms from x
@@ -187,6 +212,15 @@ def x_to_xp_L(x, n):
 def L_to_cov(L):
     if isinstance(L, torch.Tensor):
         L = L.numpy()
+    single_matrix = len(L.shape) == 2
+    if single_matrix:
+        # Add extra axis, remove at end
+        L = L.reshape(1, len(L), len(L))
+
     inverse_cov = L @ np.transpose(L, (0, 2, 1))
-    return np.stack([np.linalg.inv(x) for x in inverse_cov],
-                    axis=0)
+    cov = np.stack([np.linalg.inv(x) for x in inverse_cov],
+                   axis=0)
+
+    if single_matrix:
+        return cov[0]
+    return cov

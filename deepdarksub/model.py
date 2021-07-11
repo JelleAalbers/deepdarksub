@@ -151,6 +151,7 @@ class Model:
             loss_func=dds.loss_for(
                 self.fit_parameters,
                 tc['uncertainty'],
+                truncate_final=tc.get('truncate_final', False),
                 parameter_weights=tc.get('parameter_weights')),
             metrics=self.metrics,
             pretrained=False,

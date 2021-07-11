@@ -47,31 +47,32 @@ Path('./plots').mkdir(exist_ok=True)
 train_config = dict(
     dataset_name = args.dataset,
     fit_parameters = (
-        'main_deflector_parameters_theta_E',
-        'subhalo_parameters_sigma_sub',
-        'los_parameters_delta_los',
         'main_deflector_parameters_center_x',
         'main_deflector_parameters_center_y',
         'main_deflector_parameters_gamma',
         'main_deflector_parameters_gamma1',
         'main_deflector_parameters_gamma2',
         'main_deflector_parameters_e1',
-        'main_deflector_parameters_e2'),
+        'main_deflector_parameters_e2',
+        'main_deflector_parameters_theta_E',
+        'los_parameters_delta_los',
+        'subhalo_parameters_sigma_sub'),
     uncertainty = args.uncertainty,
     augment_rotation = 'free',
     batch_size = args.batch_size,
-    
+    truncate_final = True,
+
     parameter_weights={
         'subhalo_parameters_sigma_sub': 10,
     },
-    
+
     lr_schedule={
         'pct_start': args.pct_start
     },
     architecture_options = {
         'widen': args.widen
     },
-    
+
     n_epochs = args.epochs,
     architecture = args.architecture,
     bn_final = True,
@@ -86,7 +87,7 @@ if not data_dir.exists():
     print(f"Extracting training data to {data_dir} (will take a minute or so)")
     command = f'7z x {SCRATCH}/{train_config["dataset_name"]}.zip -o{LSCRATCH}'
     dds.run_command(command)
-    
+
 model = dds.Model(**train_config, base_dir=LSCRATCH)
 
 if args.finetune:
@@ -113,7 +114,7 @@ result_name = model.train()
 results = model.predict_all()
 plt.figure(figsize=(4,4))
 plt.scatter(results['pred']['theta_E'],
-            results['pred']['sigma_sub'], 
+            results['pred']['sigma_sub'],
             marker='.', edgecolor='none', s=2,)
 plt.xlabel(r"$\theta_E$")
 plt.ylabel(r"$\Sigma_\mathrm{sub}$")
