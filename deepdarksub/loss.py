@@ -8,7 +8,7 @@ export, __all__ = dds.exporter()
 
 @export
 def loss_for(fit_parameters, uncertainty, soft_loss_max=1000,
-             truncate_final=False,
+             truncate_final_to=None,
              parameter_weights=None):
     n_params = len(fit_parameters)
 
@@ -29,17 +29,17 @@ def loss_for(fit_parameters, uncertainty, soft_loss_max=1000,
         return WeightedLoss(
             n_params,
             parameter_weights,
-            truncate_final=truncate_final)
+            truncate_final_to=truncate_final_to)
     elif uncertainty == 'diagonal':
         return UncertaintyLoss(
             n_params,
             parameter_weights,
-            truncate_final=truncate_final)
+            truncate_final_to=truncate_final_to)
     elif uncertainty == 'correlated':
         return CorrelatedUncertaintyLoss(
             n_params,
             parameter_weights,   # Inert
-            truncate_final=truncate_final,
+            truncate_final_to=truncate_final_to,
             soft_loss_max=soft_loss_max)
     else:
         raise ValueError(f"Uncertainty {uncertainty} not recognized")
@@ -49,14 +49,14 @@ def loss_for(fit_parameters, uncertainty, soft_loss_max=1000,
 class WeightedLoss(fv.nn.Module):
 
     def __init__(self, n_params, parameter_weights, *args,
-                 truncate_final=False,
+                 truncate_final_to=None,
                  **kwargs):
         self.n_params = n_params
         assert len(parameter_weights) == n_params
         # Force weights to sum to one
         parameter_weights = parameter_weights / parameter_weights.sum()
         self.parameter_weights = parameter_weights
-        self.truncate_final = truncate_final
+        self.truncate_final_to = truncate_final_to
         super().__init__(*args, **kwargs)
 
     def forward(self, x, y, reduction='mean'):
@@ -76,10 +76,11 @@ class WeightedLoss(fv.nn.Module):
          - mean: Predicted mean
          - std: Predicted std
         """
-        if not self.truncate_final:
+        if self.truncate_final_to is None:
             return 0.
         # 1 - Normal(mean,std).CDF(0)
-        f_above = 1 - 0.5 * (1 + torch.erf(- mean/(std * 2**0.5)))
+        f_above = 1 - 0.5 * (1 + torch.erf((self.truncate_final_to - mean)
+                                           /(std * 2**0.5)))
         print(f"{f_above=}, {std=} in torch")
         # -2 log (1/f_above) = 2 log f_above
         return 2 * torch.log(f_above)

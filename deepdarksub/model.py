@@ -143,6 +143,15 @@ class Model:
 
         self.dropout_switch = dds.TestTimeDropout()
 
+        if tc.get('truncate_final_to') is None:
+            truncate_final_to = None
+        else:
+            # Truncate final parameter to physical value = 0;
+            # find encoded value of zero
+            final_p = list(self.fit_parameters)[-1]
+            truncate_final_to = self.normalizer.norm(0, param_name=final_p)
+            print(f"Truncating {final_p} to 0, encoded as {truncate_final_to}")
+
         self.learner = fv.cnn_learner(
             dls=self.data_loaders,
             arch=arch,
@@ -151,7 +160,7 @@ class Model:
             loss_func=dds.loss_for(
                 self.fit_parameters,
                 tc['uncertainty'],
-                truncate_final=tc.get('truncate_final', False),
+                truncate_final_to=truncate_final_to,
                 parameter_weights=tc.get('parameter_weights')),
             metrics=self.metrics,
             pretrained=False,

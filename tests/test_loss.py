@@ -49,7 +49,7 @@ def test_uncertainty_loss():
 
     # Test with truncation term
     np.testing.assert_almost_equal(
-        dds.loss_for(fit_parameters, 'correlated', truncate_final=True)(xt, yt),
+        dds.loss_for(fit_parameters, 'correlated', truncate_final_to=0.)(xt, yt),
         loss_numpy(x, y, truncate_final=True),
         decimal=3)
 
