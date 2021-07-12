@@ -70,7 +70,13 @@ class WeightedLoss(fv.nn.Module):
 
     def truncation_term(self, mean, std=1):
         """Return term to be added to -2 log L loss for truncating the
-        estimated posterior of a fit_parameter with to non-negative values.
+        estimated posterior of a fit_parameter with to non-negative physical
+        values.
+        
+        If the posterior is >90% out of range, only part of the normalization will 
+        be compensated. This helps avoid
+          (a) NAN NAN NAN when starting training
+          (b) ridiculously low predictions
 
         Args:
          - mean: Predicted mean
@@ -81,7 +87,9 @@ class WeightedLoss(fv.nn.Module):
         # 1 - Normal(mean,std).CDF(0)
         f_above = 1 - 0.5 * (1 + torch.erf((self.truncate_final_to - mean)
                                            /(std * 2**0.5)))
-        print(f"{f_above=}, {std=} in torch")
+        # print(f"f_above range: {f_above.min():.4f}, {f_above.max():.4f}")
+        f_above = f_above.clamp(0.1, 1)
+
         # -2 log (1/f_above) = 2 log f_above
         return 2 * torch.log(f_above)
 

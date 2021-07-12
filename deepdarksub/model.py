@@ -143,7 +143,7 @@ class Model:
 
         self.dropout_switch = dds.TestTimeDropout()
 
-        if tc.get('truncate_final_to') is None:
+        if tc.get('truncate_final') is None:
             truncate_final_to = None
         else:
             # Truncate final parameter to physical value = 0;
