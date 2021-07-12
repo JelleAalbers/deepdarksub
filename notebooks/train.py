@@ -27,6 +27,9 @@ parser.add_argument(
     '--lr', default=0.1,
     help='Base learning rate to use')
 parser.add_argument(
+    '--truncate_final', action='store_true',
+    help="Truncate the final parameter's posterior to be >= 0")
+parser.add_argument(
     '--pct_start', default=0.3, type=float,
     help='Fraction of training to use for warm-up (ascending LR)')
 args = parser.parse_args()
@@ -60,7 +63,7 @@ train_config = dict(
     uncertainty = args.uncertainty,
     augment_rotation = 'free',
     batch_size = args.batch_size,
-    truncate_final = True,
+    truncate_final = args.truncate_final,
 
     parameter_weights={
         'subhalo_parameters_sigma_sub': 10,
