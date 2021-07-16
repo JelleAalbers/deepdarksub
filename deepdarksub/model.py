@@ -33,19 +33,21 @@ short_names = dict((
 class Model:
 
     @classmethod
-    def from_json(cls, filename, **kwargs):
+    def from_json(cls, filename, with_weights=True, **kwargs):
         """Build model using configuration from a json
         metadata file.
 
         Args:
             filename: full path to json
+            with_weights: Try to load weights from .pth file in the same folder
             **kwargs: any options to override train_config
                 from the json with.
 
         To setup pretrained models, you must also load the weights!
         """
-        with open(filename) as f:
-            r = json.load(f)
+        # The model json evolved from the training log
+        r = load_training_log(filename)
+
         original_dataset = r['train_config']['dataset_name']
         if 'normalizer_means' in r:
             # Oops, should have put these in train_config
@@ -56,8 +58,25 @@ class Model:
                   f"trained for {original_dataset}, assuming its statistics "
                   "for normalization.")
             kwargs.update(normalizer_defaults(original_dataset))
+
         kwargs = {**r['train_config'], **kwargs}
-        return cls(**kwargs)
+        model = cls(**kwargs)
+
+        model.training_log = r
+
+        if with_weights:
+            model_name = Path(filename).stem
+            expected_loc = Path(model.learner.model_dir) / (model_name + '.pth')
+            if expected_loc.exists():
+                model.learner.load(model_name)
+            else:
+                raise ValueError(
+                    f"Missing weights file at {expected_loc}; use "
+                    "with_weights=False to leave weights to (random) "
+                    "initial values")
+
+        return model
+
 
     def __init__(self,
                  verbose=True,
@@ -114,9 +133,11 @@ class Model:
         else:
             self.normalizer = dds.Normalizer(self.metadata, self.fit_parameters)
 
-        print(f"Cuda available: {torch.cuda.is_available()}")
-        print("CUDA device: "
-            + torch.cuda.get_device_name(torch.cuda.current_device()))
+        self.has_cuda = torch.cuda.is_available()
+        print(f"Cuda available: {self.has_cuda}")
+        if self.has_cuda:
+            print("CUDA device: "
+                + torch.cuda.get_device_name(torch.cuda.current_device()))
 
         # Setting these up will take a while; looks like it's loading the entire
         # dataset in RAM? I'm probably butchering the fastai dataloader API...
@@ -254,9 +275,11 @@ class Model:
         """Return (pred=..., unc=..., true=...) for validation or training data.
 
         Args:
-            dataset: 'train' gets training data results, 'val' validation data
-            as_dict: If True, ... is a dict of arrays (one per param),
-                otherwise a 2d array (param order matches self.fit_parameters).
+            dataset: 'train' gets training data results, 'val' (default)
+                validation data.
+            as_dict: If True, ... in return value is a dict of arrays,
+                (one per param), otherwise a 2d array (param order matches
+                self.fit_parameters).
             short_names: If True, dicts will use short-form parameter names
         """
         preds, targets = self.learner.get_preds(
@@ -341,7 +364,7 @@ class Model:
 
 @export
 def load_training_log(fn):
-    """Return info from the training log filename fn"""
+    """Return info from the training log / model json filename fn"""
     with open(fn) as f:
         r = json.load(f)
 
@@ -368,6 +391,11 @@ def load_training_log(fn):
 
 @export
 def normalizer_defaults(dataset_name):
+    """Get normalizer defaults for dataset name
+
+    Legacy code, will eventually be removed; new models have this info
+        in their jsons!
+    """
     if dataset_name == 'dl_ss_npy':
         return {
             'normalizer_means': {
