@@ -304,6 +304,40 @@ class Model:
         return {dds.short_names[pname]: val
                 for pname, val in x.items()}
 
+    def attribute(self, image, parameter_name='sigma_sub',
+                  interpreter=None, **kwargs):
+        """Return attribution of parameter_name prediction in image
+
+        Args:
+         - image: Raw input image (not normalized)
+         - parameter_name: prediction to get attribution for
+         - interpreter: captum Attribution class; default is IntegratedGradients
+         - **kwargs: passed to interpreter.attribute
+
+        Returns:
+            np.ndarray: numpy array with same shape as image
+        """
+        import captum   # Not making it a hard dependency
+        if interpreter is None:
+            interpreter = captum.attr.IntegratedGradients
+        # Load image from file, apply normalization
+        x = dds.single_image_input(
+            image,
+            device=next(self.learner.model.parameters()).device)
+
+        param_i = self.short_names.index(parameter_name)
+
+        interp = interpreter(lambda _x: self.learner.model(_x)[:, param_i])
+        try:
+            # Force evaluation mode -- disable dropout and lets batchnorm use
+            # whatever it should use at test time.
+            self.learner.eval()
+            result = interp.attribute(x, **kwargs)
+        finally:
+            self.learner.train()
+
+        return np.squeeze(result.cpu().numpy())
+
     def train(self, model_dir='models', lr_find=True):
         """Train the model according to the configuration, then
         save model (.pth) and training log (.json) in results_dir"""
