@@ -317,7 +317,7 @@ class Model:
         Returns:
             np.ndarray: numpy array with same shape as image
         """
-        import captum   # Not making it a hard dependency
+        import captum.attr   # Not making it a hard dependency
         if interpreter is None:
             interpreter = captum.attr.IntegratedGradients
         # Load image from file, apply normalization
