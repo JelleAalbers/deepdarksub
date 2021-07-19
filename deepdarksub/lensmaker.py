@@ -177,12 +177,16 @@ class LensMaker:
         return self._to_lens_list(sub_model_list, sub_kwargs_list), spy_reports
 
     def simple_subhalos(self, masses, positions, concentration=15, truncation=5):
-        """Return list of (model string, config dict) for subhalo lenses
-        :param masses: list of subhalo masses
-        :param positions: list of (x,y) subhalo positions (arcsec, on lens plane)
+        """Return (lenses, meta) for subhalos
+
+        Args:
+         - masses: sequence of subhalo masses
+         - positions: sequence of (x,y) subhalo positions
+         - concentration: concentration to use
+         - truncation: TNFW r_trunc/r_scale
 
         Concentration=15, truncation=5 defaults come from
-            https://arxiv.org/pdf/2009.06639.pdf.
+            https://arxiv.org/pdf/2009.06639.pdf
         """
         # LensCosmo handles cosmology-dependent parameter conversions
         lens_cosmo = ls.LensCosmo(
@@ -206,9 +210,29 @@ class LensMaker:
                 'r_trunc': truncation * r_scale,
                 'center_x': x, 'center_y': y})
             meta.append(subhalo[1])
-            meta[-1].update(m=m, c=concentration)
             lenses.append(subhalo)
-        return lenses, pd.Dataframe(meta)
+
+        df = pd.DataFrame(meta)
+        df['z'] = self.z_lens
+        df['m'] = m
+        df['c'] = concentration
+        return lenses, df
+
+    def lens_model_kwargs(self, lenses):
+        """Return lenstronomy (LensModel, kwargs) corresponding to Lenses"""
+        lens_model_names, lens_kwargs, lens_zs = self._from_lens_list(lenses)
+        if lens_zs is None:
+            lens_model = ls.LensModel_(
+                lens_model_names,
+                z_lens=self.z_lens)
+        else:
+            lens_model = ls.LensModel_(
+                lens_model_names,
+                z_source=self.z_source,
+                lens_redshift_list=lens_zs,
+                cosmo=self.astropy_cosmology,
+                multi_plane=True)
+        return lens_model, lens_kwargs
 
     def lensed_image(self, lenses=None, catalog_i=None, phi=None,
                      noise_seed=42, mask_radius=None):
@@ -233,18 +257,7 @@ class LensMaker:
         catalog_i, phi = \
             self.catalog.fill_catalog_i_phi_defaults(catalog_i, phi)
 
-        lens_model_names, lens_kwargs, lens_zs = self._from_lens_list(lenses)
-        if lens_zs is None:
-            lens_model = ls.LensModel_(
-                lens_model_names,
-                z_lens=self.z_lens)
-        else:
-            lens_model = ls.LensModel_(
-                lens_model_names,
-                z_source=self.z_source,
-                lens_redshift_list=lens_zs,
-                cosmo=self.astropy_cosmology,
-			    multi_plane=True)
+        lens_model, lens_kwargs = self.lens_model_kwargs(lenses)
 
         source_model_class, kwargs_source = self.catalog.draw_source(
             catalog_i=catalog_i,

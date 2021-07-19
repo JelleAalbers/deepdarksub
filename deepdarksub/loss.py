@@ -122,8 +122,9 @@ class UncertaintyLoss(WeightedLoss):
                 * self.parameter_weights[None,:],
             dim=1)
 
-        # Part 2: -2 log(det_of_cov**-0.5) = sum log x_unc (no 2!)
-        loss += torch.sum(
+        # Part 2: -2 log(det_of_cov**-0.5) = 2 sum log x_unc
+        # (since trace(diag(cov)) = sum x_unc**2)
+        loss += 2 *torch.sum(
             torch.log(x_unc) * self.parameter_weights[None,:],
             dim=1)
 

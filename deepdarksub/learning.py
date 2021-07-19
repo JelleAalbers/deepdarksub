@@ -2,6 +2,7 @@ import contextlib
 from immutabledict import immutabledict
 from pathlib import Path
 from functools import partial
+import tempfile
 
 import fastai.vision.all as fv
 import numpy as np
@@ -43,6 +44,25 @@ class NumpyImage(fv.PILImage):
         data = data.clip(0, 1)
 
         return cls(PIL.Image.fromarray(data))
+
+
+@export
+def single_image_input(img, device='cpu'):
+    """Return neural net input given a single image
+        (useful for feature attribution)
+    """
+    if isinstance(img, np.ndarray):
+        # Use a temporary file, to ensure exactly the same initialization
+        # code is run.
+        with tempfile.NamedTemporaryFile() as tempf:
+            np.save(tempf, img)
+            img = dds.NumpyImage.create(Path(tempf.name))
+    else:
+        img = dds.NumpyImage.create(Path(img))
+    img = torch.tensor(np.array(img), device=device)
+    # Add batch dimension (1) and channel dimension (1 since monochrome)
+    img = img[None, None, :,:]
+    return img
 
 
 @export

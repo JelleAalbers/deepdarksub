@@ -27,11 +27,32 @@ parameter_labels = {
     'e1': r'$e_1$', 'e2': r'$e_2$',
     'gamma1': r'$\gamma_1$', 'gamma2': r'$\gamma_2$'}
 
+
+@export
+def save_plot(*plot_name, pdf=False, **kwargs):
+    """Save plot to ./plots/plot_name.png with standard options
+        If several name elements passed, join by _.
+    """
+    kwargs.setdefault('bbox_inches', 'tight')
+    kwargs.setdefault('dpi', 200)
+    plot_name = '_'.join(plot_name)
+    plt.savefig(f'./plots/{plot_name}.png', **kwargs)
+    if pdf:
+        plt.savefig(f'./plots/{plot_name}.pdf', **kwargs)
+
+
 @export
 def image_grid(
         shape, pixel_width=manada.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH,
         x0=0, y0=0, edges=True):
-    """Return x, y edges/centers of image coordinates"""
+    """Return x, y edges of image coordinates
+
+    Args:
+        - pixel_width: pixel width (in whatever units you want, e.g. arcsec)
+        - x0, y0: center of grid
+        - edges: If True (default), returns pixel edges.
+            If False, returns pixel centers
+    """
     nx, ny = shape
     dx = nx * pixel_width
     dy = nx * pixel_width
@@ -89,7 +110,7 @@ def plot_image(img,
 
 @export
 def show_image(*args, **kwargs):
-    """Alias for plot_image, since I keep mistyping it"""
+    # Alias for plot_image, since I keep mistyping it
     return plot_image(*args, **kwargs)
 
 
@@ -202,16 +223,15 @@ def confidence_ellipse(
 
     Args:
      - mean: array-like, shape (2,); location of mean
-     - cov: array-like, shape (2, 2), 2d covariance matri
+     - cov: array-like, shape (2, 2), 2d covariance matrix
      - ax: matplotlib.axes.Axes to draw the ellipse into
      - percentile: Probability mass included in the ellipse;
         50% by default.
      - **kwargs forwarded to `~matplotlib.patches.Ellipse`
-
-    Adapted from Carsten Schelp / matplotlib example gallery:
-     - https://matplotlib.org/stable/gallery/statistics/confidence_ellipse.html
-     - https://gist.github.com/CarstenSchelp/b992645537660bda692f218b562d0712
     """
+    # Adapted from Carsten Schelp / matplotlib example gallery:
+    #  - https://matplotlib.org/stable/gallery/statistics/confidence_ellipse.html
+    #  - https://gist.github.com/CarstenSchelp/b992645537660bda692f218b562d0712
     if ax is None:
         ax = plt.gca()
     mean = np.asarray(mean)
