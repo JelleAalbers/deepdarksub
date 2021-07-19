@@ -1,5 +1,7 @@
 astropy
+fastai
 immutabledict
 lenstronomy
 manada
 numpy
+scikit-image

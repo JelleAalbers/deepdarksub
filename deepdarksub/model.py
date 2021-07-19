@@ -8,6 +8,7 @@ import tempfile
 
 import fastai.vision.all as fv
 import numpy as np
+import skimage.transform
 import torch
 
 import deepdarksub as dds
@@ -193,6 +194,7 @@ class Model:
                 as_dict=True,
                 short_names=True,
                 with_dropout=False,
+                tta=0,
                 **kwargs):
         """Return (prediction, uncertainty) for a single image
 
@@ -219,6 +221,7 @@ class Model:
             as_dict=as_dict,
             short_names=short_names,
             with_dropout=with_dropout,
+            tta=tta,
             **kwargs)
         if as_dict:
             # No need to return 1-element arrays, just extract the float
@@ -238,6 +241,7 @@ class Model:
                      as_dict=True,
                      short_names=True,
                      with_dropout=False,
+                     tta=0,
                      **kwargs):
         """Return (predictions, uncertainties) for images in filenames list
 
@@ -257,7 +261,10 @@ class Model:
         nullc = contextlib.nullcontext
         with nullc() if progress else self.learner.no_bar():
             with self.dropout_switch.active(with_dropout):
-                preds = self.learner.get_preds(dl=dl)[0]
+                if tta:
+                    preds = self.learner.tta(dl=dl, n=tta, beta=0.)[0]
+                else:
+                    preds = self.learner.get_preds(dl=dl, reorder=False)[0]
         y_pred, y_unc = self.normalizer.decode(
             preds,
             as_dict=as_dict,
@@ -290,7 +297,7 @@ class Model:
         if tta:
             # TTA already has shuffle=False
             preds, targets = self.learner.tta(
-                ds_idx, n=tta, beta=tta_beta)            
+                ds_idx, n=tta, beta=tta_beta)
         else:
             preds, targets = self.learner.get_preds(
                 ds_idx, reorder=False)
@@ -313,8 +320,13 @@ class Model:
         return {dds.short_names[pname]: val
                 for pname, val in x.items()}
 
-    def attribute(self, image, parameter_name='sigma_sub',
-                  interpreter=None, **kwargs):
+    def attribute(
+            self,
+            image,
+            parameter_name='sigma_sub',
+            interpreter=None,
+            tta=0,
+            **kwargs):
         """Return attribution of parameter_name prediction in image
 
         Args:
@@ -329,6 +341,24 @@ class Model:
         import captum.attr   # Not making it a hard dependency
         if interpreter is None:
             interpreter = captum.attr.IntegratedGradients
+
+        if tta and self.train_config['augment_rotation']:
+            # The attribution logic bypasses fastai's transformations,
+            # so we have to rotate the images ourselves.
+            # Afterwards, the attribution has to be rotated back.
+            # TODO: hardcoded 'reflect' mode!
+            attrs = []
+            for angle_deg in np.linspace(0, 360, 100):
+                im = skimage.transform.rotate(
+                    image, angle_deg, mode='reflect')
+                attr = self.attribute(
+                    im, parameter_name,
+                    interpreter=interpreter,
+                    **kwargs)
+                attrs.append(skimage.transform.rotate(
+                    attr, -angle_deg, mode='reflect'))
+            return np.mean(attrs, axis=0)
+
         # Load image from file, apply normalization
         x = dds.single_image_input(
             image,
