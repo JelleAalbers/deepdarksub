@@ -271,6 +271,8 @@ class Model:
     def predict_all(self,
                     dataset='val',
                     as_dict=True,
+                    tta=0,
+                    tta_beta=0.,
                     short_names=True):
         """Return (pred=..., unc=..., true=...) for validation or training data.
 
@@ -281,10 +283,17 @@ class Model:
                 (one per param), otherwise a 2d array (param order matches
                 self.fit_parameters).
             short_names: If True, dicts will use short-form parameter names
+            tta: if 0 (default), disable test-time augmentation (TTA).
+                otherwise, return average of this many TTA runs.
         """
-        preds, targets = self.learner.get_preds(
-            ds_idx=0 if dataset == 'train' else 1,
-            reorder=False)
+        ds_idx = 0 if dataset == 'train' else 1
+        if tta:
+            # TTA already has shuffle=False
+            preds, targets = self.learner.tta(
+                ds_idx, n=tta, beta=tta_beta)            
+        else:
+            preds, targets = self.learner.get_preds(
+                ds_idx, reorder=False)
         y_pred, y_unc = self.normalizer.decode(
             preds,
             uncertainty=self.train_config['uncertainty'],
