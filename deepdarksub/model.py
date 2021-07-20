@@ -212,6 +212,7 @@ class Model:
                     image=tempf.name,
                     as_dict=as_dict,
                     short_names=short_names,
+                    tta=tta,
                     with_dropout=with_dropout,
                     **kwargs)
 
