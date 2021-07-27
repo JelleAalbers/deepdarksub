@@ -76,7 +76,7 @@ class Normalizer:
                            for i, p in enumerate(self.fit_parameters)],
                           axis=1)
         if as_dict:
-            x_pred = self._array_to_dict(x_pred)
+            x_pred = self.array_to_dict(x_pred)
 
         if not uncertainty:
             return x_pred, None
@@ -92,10 +92,10 @@ class Normalizer:
                               for i, p in enumerate(self.fit_parameters)],
                              axis=1)
             if as_dict:
-                x_unc = self._array_to_dict(x_unc)
+                x_unc = self.array_to_dict(x_unc)
             return x_pred, x_unc
         # else can't happen, n_out would have already crashed
 
-    def _array_to_dict(self, x):
+    def array_to_dict(self, x):
         return {p: x[:, i]
                 for i, p in enumerate(self.fit_parameters)}

@@ -192,18 +192,14 @@ class Model:
     def predict(self,
                 image,
                 as_dict=True,
-                short_names=True,
-                with_dropout=False,
-                tta=0,
                 **kwargs):
         """Return (prediction, uncertainty) for a single image
 
         Args:
             image: str/Path to npy image, or numpy array
             as_dict: If True, ... returns dicts of floats, else array
-            short_names: If True, dicts will use short-form parameter names
-            with_dropout: If True, activate dropout
-                (will partially randomizes prediction)
+
+            Other kwargs as for predict_many
         """
         if isinstance(image, np.ndarray):
             with tempfile.NamedTemporaryFile() as tempf:
@@ -211,18 +207,12 @@ class Model:
                 return self.predict(
                     image=tempf.name,
                     as_dict=as_dict,
-                    short_names=short_names,
-                    tta=tta,
-                    with_dropout=with_dropout,
                     **kwargs)
 
         pred, unc = self.predict_many(
             [image],
             progress=False,
             as_dict=as_dict,
-            short_names=short_names,
-            with_dropout=with_dropout,
-            tta=tta,
             **kwargs)
         if as_dict:
             # No need to return 1-element arrays, just extract the float
