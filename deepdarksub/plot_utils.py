@@ -69,7 +69,9 @@ def plot_image(img,
                label='HST F814W',
                colorbar=True,
                adjust_ax=True,
-               vmin=None, vmax=None, **kwargs):
+               vmin=None, vmax=None,
+               cbar_kwargs=None,
+               **kwargs):
 
     # Set reasonable defaults
     if vmax is None:
@@ -84,6 +86,8 @@ def plot_image(img,
         matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax)
         if log_scale else matplotlib.colors.Normalize(vmin=vmin, vmax=vmax))
     kwargs.setdefault('cmap', 'magma')
+    if cbar_kwargs is None:
+        cbar_kwargs = dict()
 
     # Plot image, note transposition
     plt.pcolormesh(
@@ -95,7 +99,7 @@ def plot_image(img,
 
     if colorbar:
         # Plot colorbar
-        cbar = plt.colorbar(label=label, extend='both')
+        cbar = plt.colorbar(label=label, extend='both', **cbar_kwargs)
         cax = cbar.ax
         # Format colobar ticks as scalars (not 10^x)
         cax.yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%g'))
