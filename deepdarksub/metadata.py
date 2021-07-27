@@ -95,6 +95,8 @@ def load_metadata(
         # (ignore_index is worse, that would remove filename completely.)
         meta = pd.concat(metas)
 
+    meta['log_sigma_sub'] = np.log(meta['subhalo_parameters_sigma_sub'])
+
     # Add extra columns from the source metadata
     try:
         lm = dds.LensMaker()   # quick access to cosmo and catalog
