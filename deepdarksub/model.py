@@ -8,8 +8,9 @@ import tempfile
 
 import fastai.vision.all as fv
 import numpy as np
-import skimage.transform
 import torch
+import torchvision.transforms.functional
+from tqdm import tqdm
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
@@ -201,14 +202,6 @@ class Model:
 
             Other kwargs as for predict_many
         """
-        if isinstance(image, np.ndarray):
-            with tempfile.NamedTemporaryFile() as tempf:
-                np.save(tempf, image)
-                return self.predict(
-                    image=tempf.name,
-                    as_dict=as_dict,
-                    **kwargs)
-
         pred, unc = self.predict_many(
             [image],
             progress=False,
@@ -243,11 +236,36 @@ class Model:
                 otherwise 2d arrays (param order matches self.fit_parameters).
             with_dropout: If True, activate dropout
                 (will partially randomizes prediction)
+            **kwargs passed to learner.dls.test_dl
         """
         if isinstance(filenames, (str, Path)):
             raise ValueError(
                 "Expected a sequence of filenames; have you seen .predict?")
+
+        if isinstance(filenames[0], np.ndarray):
+            image_arrays = filenames
+            # Store arrays in temporary files; fastai expects filenames..
+            tempfiles = []
+            try:
+                for img in image_arrays:
+                    tempf = tempfile.NamedTemporaryFile()
+                    np.save(tempf, img)
+                    tempfiles.append(tempf)
+                return self.predict_many(
+                    [tempf.name for tempf in tempfiles],
+                    progress=progress,
+                    as_dict=as_dict,
+                    short_names=short_names,
+                    with_dropout=with_dropout,
+                    tta=tta,
+                    **kwargs)
+            finally:
+                for tempf in tempfiles:
+                    tempf.close()
+
         filenames = [Path(fn) for fn in filenames]
+
+        # Get predictions from fastai model
         dl = self.learner.dls.test_dl(filenames, **kwargs)
         nullc = contextlib.nullcontext
         with nullc() if progress else self.learner.no_bar():
@@ -256,14 +274,19 @@ class Model:
                     preds = self.learner.tta(dl=dl, n=tta, beta=0.)[0]
                 else:
                     preds = self.learner.get_preds(dl=dl, reorder=False)[0]
+
+        # Decode normalizaton and uncertainty
         y_pred, y_unc = self.normalizer.decode(
             preds,
             as_dict=as_dict,
             uncertainty=self.train_config['uncertainty'],)
+
+        # Shorten long names if desired
         if short_names and as_dict:
             y_pred = self._shorten_dict(y_pred)
             if isinstance(y_unc, dict):
                 self._shorten_dict(y_unc)
+
         return y_pred, y_unc
 
     def predict_all(self,
@@ -313,51 +336,100 @@ class Model:
 
     def attribute(
             self,
-            image,
+            input_list,
             parameter_name='sigma_sub',
             interpreter=None,
+            angle_deg=0,
+            rotate_back=True,
             tta=0,
+            batch_size=None,
+            squeeze=True,
+            progress=True,
             **kwargs):
         """Return attribution of parameter_name prediction in image
 
         Args:
-         - image: Raw input image (not normalized)
+         - image_or_filename_list: List or single filename or numpy array
          - parameter_name: prediction to get attribution for
          - interpreter: captum Attribution class; default is IntegratedGradients
+         - angle_deg: rotate images by this angle (in degrees),
+         - rotate_back: rotate attributions by -angle_deg
+         - tta: average over this many rorate-attribute-derotate runs.
+            The angles used are linspace(0, 360, tta + 1)[:-1],
+            so tta=4 does all right angles without repeating the original image
+         - batch_size: batch size to use during attribution. If None, use
+            the same as the model's configured batch size
+         - squeeze: whether to squeeze 1-length dimensions from output
+         - progress: whether to show progress bar.
          - **kwargs: passed to interpreter.attribute
 
         Returns:
-            np.ndarray: numpy array with same shape as image
+            np.ndarray: numpy array of attributions; len-1 dimensions removed
         """
+        # Batching
+        if batch_size is None:
+            batch_size = self.train_config['batch_size']
+        if (isinstance(input_list, (tuple, list))
+                and len(input_list) > batch_size):
+            input_batches = [
+                input_list[i : i + batch_size]
+                for i in range(0, len(input_list), batch_size)]
+            if progress:
+                input_batches = tqdm(input_batches, desc='Attributing')
+            result = np.concatenate([
+                self.attribute(
+                    batch,
+                    parameter_name,
+                    interpreter=interpreter,
+                    angle_deg=angle_deg,
+                    rotate_back=rotate_back,
+                    tta=tta,
+                    batch_size=batch_size,
+                    # squeeze blows up concat if final batch has size 1
+                    squeeze=False,
+                    # No need to pass progress, won't trigger
+                    **kwargs)
+                for batch in input_batches],
+                axis=0)
+            if squeeze:
+                result = np.squeeze(result)
+            return result
+
         import captum.attr   # Not making it a hard dependency
         if interpreter is None:
             interpreter = captum.attr.IntegratedGradients
 
         if tta and self.train_config['augment_rotation']:
+            if angle_deg:
+                raise ValueError("Pass either tta or angle_deg")
             # The attribution logic bypasses fastai's transformations,
             # so we have to rotate the images ourselves.
             # Afterwards, the attribution has to be rotated back.
             # TODO: hardcoded 'reflect' mode!
             attrs = []
-            for angle_deg in np.linspace(0, 360, 100):
-                im = skimage.transform.rotate(
-                    image, angle_deg, mode='reflect')
-                attr = self.attribute(
-                    im, parameter_name,
+            for _angle_deg in np.linspace(0, 360, tta + 1)[:-1]:
+                attrs.append(self.attribute(
                     interpreter=interpreter,
-                    **kwargs)
-                attrs.append(skimage.transform.rotate(
-                    attr, -angle_deg, mode='reflect'))
+                    angle_deg=_angle_deg,
+                    rotate_back=rotate_back,
+                    tta=tta,
+                    batch_size=batch_size,
+                    squeeze=squeeze,
+                    **kwargs))
             return np.mean(attrs, axis=0)
 
-        # Load image from file, apply normalization
-        x = dds.single_image_input(
-            image,
+        # Load image(s) from file, apply normalization
+        x = dds.image_to_input(
+            input_list,
             device=next(self.learner.model.parameters()).device)
 
-        param_i = self.short_names.index(parameter_name)
+        # Rotate if desired
+        if angle_deg:
+            x = torchvision.transforms.functional.rotate(x, angle_deg)
 
+        param_i = self.short_names.index(parameter_name)
         interp = interpreter(lambda _x: self.learner.model(_x)[:, param_i])
+
         try:
             # Force evaluation mode -- disable dropout and lets batchnorm use
             # whatever it should use at test time.
@@ -366,7 +438,15 @@ class Model:
         finally:
             self.learner.train()
 
-        return np.squeeze(result.cpu().numpy())
+        result = result.cpu()
+        # Rotate the attribution back
+        if angle_deg and rotate_back:
+            x = torchvision.transforms.functional.rotate(x, -angle_deg)
+
+        result = result.numpy()
+        if squeeze:
+            result = np.squeeze(result)
+        return result
 
     def train(self, model_dir='models', lr_find=True):
         """Train the model according to the configuration, then
