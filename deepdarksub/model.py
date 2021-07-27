@@ -331,8 +331,11 @@ class Model:
 
     @staticmethod
     def _shorten_dict(x):
-        return {dds.short_names[pname]: val
-                for pname, val in x.items()}
+        result = {dds.short_names[pname]: val
+                  for pname, val in x.items()}
+        if 'log_sigma_sub' in self.fit_parameters:
+            result['sigma_sub'] = np.exp(result['log_sigma_sub'])
+        return result
 
     def attribute(
             self,
