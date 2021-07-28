@@ -20,6 +20,7 @@ mdef = 'main_deflector_parameters_'
 short_names = dict((
     (mdef + 'theta_E', 'theta_E'),
     ('subhalo_parameters_sigma_sub', 'sigma_sub'),
+    ('log_sigma_sub', 'log_sigma_sub'),
     ('los_parameters_delta_los', 'delta_los'),
     (mdef + 'center_x', 'center_x'),
     (mdef + 'center_y', 'center_y'),
@@ -165,7 +166,7 @@ class Model:
 
         self.dropout_switch = dds.TestTimeDropout()
 
-        if tc.get('truncate_final') is None:
+        if tc.get('truncate_final'):
             truncate_final_to = None
         else:
             # Truncate final parameter to physical value = 0;

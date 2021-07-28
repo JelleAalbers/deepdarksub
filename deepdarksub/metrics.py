@@ -99,9 +99,12 @@ class CorrSSubMetric(MyMetric):
 @export
 def all_metrics(fit_parameters, normalizer, short_names, uncertainty):
     if uncertainty == 'diagonal':
-        metric_classes = (RMSEMetric, UncertaintyMetric, PearsonRMetric, CorrSSubMetric)
+        metric_classes = [RMSEMetric, UncertaintyMetric, PearsonRMetric]
     else:
-        metric_classes = (RMSEMetric, PearsonRMetric, CorrSSubMetric)
+        metric_classes = [RMSEMetric, PearsonRMetric]
+    
+    if 'sigma_sub' in fit_parameters:
+        metric_classes.append(CorrSSubMetric)
     
     return [
         f(normalizer, param, short_name, uncertainty).make()
