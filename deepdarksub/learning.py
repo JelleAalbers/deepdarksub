@@ -47,10 +47,21 @@ class NumpyImage(fv.PILImage):
 
 
 @export
-def single_image_input(img, device='cpu'):
-    """Return neural net input given a single image
+def image_to_input(img, device='cpu'):
+    """Return neural net input given one or more images
         (useful for feature attribution)
+
+    Args:
+     - img: numpy array or image filename
+
+    Returns: (1, 1, image_dim1, image_dim2) tensor
+        (axis 0 is the batch dimension, axis 1 color)
     """
+    if isinstance(img, (tuple, list)):
+        # Concatenate along batch dimension
+        return torch.cat(
+            tuple([image_to_input(_img) for _img in img]),
+            dim=0).to(device)
     if isinstance(img, np.ndarray):
         # Use a temporary file, to ensure exactly the same initialization
         # code is run.
@@ -206,19 +217,6 @@ def _get_y_classification(fn, *, meta):
 
 def _get_y_segmentation(fn, *, mask_dir):
     return Path(mask_dir) / (fn.stem + '.png')
-
-
-@export
-def predict_many(learn, normalizer, filenames,
-                 uncertainty=False,
-                 progress=True,
-                 **kwargs):
-    if isinstance(filenames, (str, Path)):
-        filenames = [filenames]
-    dl = learn.dls.test_dl(filenames, **kwargs)
-    with contextlib.nullcontext() if progress else learn.no_bar():
-        preds = learn.get_preds(dl=dl)[0]
-    return normalizer.decode(preds, uncertainty=uncertainty)
 
 
 @export
