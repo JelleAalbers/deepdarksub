@@ -24,6 +24,9 @@ parser.add_argument(
     '--dataset', default='dl_ss_npy',
     help='Dataset to use, must be a .zip in SCRATCH')
 parser.add_argument(
+    '--log_sigma_sub', action='store_true',
+    help='Predict log of sigma_sub instead of sigma_sub')
+parser.add_argument(
     '--lr', default=0.1,
     help='Base learning rate to use')
 parser.add_argument(
@@ -59,7 +62,7 @@ train_config = dict(
         'main_deflector_parameters_e2',
         'main_deflector_parameters_theta_E',
         'los_parameters_delta_los',
-        'subhalo_parameters_sigma_sub'),
+        'log_sigma_sub' if args.log_sigma_sub else 'subhalo_parameters_sigma_sub'),
     uncertainty = args.uncertainty,
     augment_rotation = 'free',
     batch_size = args.batch_size,
