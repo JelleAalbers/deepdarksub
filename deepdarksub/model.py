@@ -329,8 +329,7 @@ class Model:
                              ('unc', y_unc),
                              ('true', y_true)]}
 
-    @staticmethod
-    def _shorten_dict(x):
+    def _shorten_dict(self, x):
         result = {dds.short_names[pname]: val
                   for pname, val in x.items()}
         if 'log_sigma_sub' in self.fit_parameters:
