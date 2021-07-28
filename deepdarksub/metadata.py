@@ -95,7 +95,11 @@ def load_metadata(
         # (ignore_index is worse, that would remove filename completely.)
         meta = pd.concat(metas)
 
-    meta['log_sigma_sub'] = np.log(meta['subhalo_parameters_sigma_sub'])
+    # Add short names and logs
+    for pname, short_name in dds.short_names:
+        meta[short_name] = meta[pname]
+    for pname in dds.log_able_params:
+        meta['log_' + pname] = np.log(meta[pname])
 
     # Add extra columns from the source metadata
     try:

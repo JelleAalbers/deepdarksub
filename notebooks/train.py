@@ -24,8 +24,9 @@ parser.add_argument(
     '--dataset', default='dl_ss_npy',
     help='Dataset to use, must be a .zip in SCRATCH')
 parser.add_argument(
-    '--log_sigma_sub', action='store_true',
-    help='Predict log of sigma_sub instead of sigma_sub')
+    '--log', nargs='+',
+    help='Short names of fit parameters for which NN should '
+         'predict log')
 parser.add_argument(
     '--lr', default=0.1,
     help='Base learning rate to use')
@@ -50,19 +51,30 @@ SCRATCH = os.getenv('SCRATCH')    # Where training data zips are
 LSCRATCH = os.getenv('LSCRATCH')  # Where to unzip (will make subfolder)
 Path('./plots').mkdir(exist_ok=True)
 
+
+fit_parameters = (
+    'main_deflector_parameters_center_x',
+    'main_deflector_parameters_center_y',
+    'main_deflector_parameters_gamma',
+    'main_deflector_parameters_gamma1',
+    'main_deflector_parameters_gamma2',
+    'main_deflector_parameters_e1',
+    'main_deflector_parameters_e2',
+    'main_deflector_parameters_theta_E',
+    'los_parameters_delta_los',
+    'subhalo_parameters_sigma_sub')
+# Use short names when possible
+fit_parameters = [
+    dds.short_names.get(p, p)
+    for p in fit_parameters]
+fit_parameters = [
+    'log_' + p if p in args.log else p
+    for p in fit_parameters]
+
+
 train_config = dict(
     dataset_name = args.dataset,
-    fit_parameters = (
-        'main_deflector_parameters_center_x',
-        'main_deflector_parameters_center_y',
-        'main_deflector_parameters_gamma',
-        'main_deflector_parameters_gamma1',
-        'main_deflector_parameters_gamma2',
-        'main_deflector_parameters_e1',
-        'main_deflector_parameters_e2',
-        'main_deflector_parameters_theta_E',
-        'los_parameters_delta_los',
-        'log_sigma_sub' if args.log_sigma_sub else 'subhalo_parameters_sigma_sub'),
+    fit_parameters = fit_parameters,
     uncertainty = args.uncertainty,
     augment_rotation = 'free',
     batch_size = args.batch_size,

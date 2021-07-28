@@ -18,10 +18,10 @@ __all__.extend(['short_names'])
 
 
 mdef = 'main_deflector_parameters_'
+log_able_params = ('theta_E', 'sigma_sub', 'delta_los', 'gamma')
 short_names = dict((
     (mdef + 'theta_E', 'theta_E'),
     ('subhalo_parameters_sigma_sub', 'sigma_sub'),
-    ('log_sigma_sub', 'log_sigma_sub'),
     ('los_parameters_delta_los', 'delta_los'),
     (mdef + 'center_x', 'center_x'),
     (mdef + 'center_y', 'center_y'),
@@ -105,7 +105,7 @@ class Model:
 
         self.fit_parameters = tc['fit_parameters']
         self.n_params = len(self.fit_parameters)
-        self.short_names = [dds.short_names[pname]
+        self.short_names = [dds.short_names.get(pname, pname)
                             for pname in self.fit_parameters]
 
         if test_only:
@@ -331,10 +331,14 @@ class Model:
                              ('true', y_true)]}
 
     def _shorten_dict(self, x):
-        result = {dds.short_names[pname]: val
-                  for pname, val in x.items()}
-        if 'log_sigma_sub' in self.fit_parameters:
-            result['sigma_sub'] = np.exp(result['log_sigma_sub'])
+        result = dict()
+        for pname, val in x.items():
+            new_pname = self.short_names.get(pname, pname)
+            result[new_pname] = val
+            # Also store exp of log params
+            # (though this probably makes no sense for log uncs...)
+            if new_pname.startswith('log_'):
+                result[new_pname[4:]] = np.exp(val)
         return result
 
     def attribute(
