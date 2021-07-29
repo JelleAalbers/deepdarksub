@@ -138,8 +138,7 @@ def data_block(
         # and don't expect unpickling to work nicely....
 
         _index_of = immutabledict({
-            x: list(fit_parameters).index(
-                'main_deflector_parameters_' + x)
+            x: list(fit_parameters).index(x)
             for x in (
                 'e1', 'e2',
                 'gamma1', 'gamma2',

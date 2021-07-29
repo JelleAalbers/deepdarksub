@@ -96,7 +96,7 @@ def load_metadata(
         meta = pd.concat(metas)
 
     # Add short names and logs
-    for pname, short_name in dds.short_names:
+    for pname, short_name in dds.short_names.items():
         meta[short_name] = meta[pname]
     for pname in dds.log_able_params:
         meta['log_' + pname] = np.log(meta[pname])

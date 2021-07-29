@@ -37,7 +37,7 @@ class Normalizer:
             for (p1, p2) in (('e1', 'e2'),
                              ('gamma1', 'gamma2'),
                              ('center_x', 'center_y')):
-                p1, p2 = ['main_deflector_parameters_' + p for p in (p1, p2)]
+                # p1, p2 = ['main_deflector_parameters_' + p for p in (p1, p2)]
                 self.means[p1] = self.means[p2] = 0
                 self.scales[p1] = self.scales[p2] = \
                     (self.scales[p1] + self.scales[p2]) / 2

@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
-__all__.extend(['short_names'])
+__all__.extend(['short_names', 'log_able_params'])
 
 
 mdef = 'main_deflector_parameters_'
