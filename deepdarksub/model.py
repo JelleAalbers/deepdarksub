@@ -520,7 +520,7 @@ def load_training_log(fn):
         r = json.load(f)
 
     r['short_names'] = short_names = [
-        dds.short_names[pname]
+        dds.short_names.get(pname, pname)
         for pname in r['train_config']['fit_parameters']]
     # Collect training data metrics of the same kind together
     ms = dict()
