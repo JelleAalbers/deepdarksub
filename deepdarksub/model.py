@@ -167,7 +167,7 @@ class Model:
 
         self.dropout_switch = dds.TestTimeDropout()
 
-        if tc.get('truncate_final'):
+        if not tc.get('truncate_final'):
             truncate_final_to = None
         else:
             # Truncate final parameter to physical value = 0;
@@ -333,7 +333,7 @@ class Model:
     def _shorten_dict(self, x):
         result = dict()
         for pname, val in x.items():
-            new_pname = self.short_names.get(pname, pname)
+            new_pname = dds.short_names.get(pname, pname)
             result[new_pname] = val
             # Also store exp of log params
             # (though this probably makes no sense for log uncs...)
