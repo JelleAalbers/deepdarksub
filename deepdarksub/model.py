@@ -274,7 +274,8 @@ class Model:
                 if tta:
                     preds = self.learner.tta(dl=dl, n=tta, beta=0.)[0]
                 else:
-                    preds = self.learner.get_preds(dl=dl, reorder=False)[0]
+                    # reorder=True means undo shuffling, get back normal order
+                    preds = self.learner.get_preds(dl=dl, reorder=True)[0]
 
         # Decode normalizaton and uncertainty
         y_pred, y_unc = self.normalizer.decode(
@@ -314,8 +315,9 @@ class Model:
             preds, targets = self.learner.tta(
                 ds_idx, n=tta, beta=tta_beta)
         else:
+            # reorder=True means undo shuffling, get back normal order
             preds, targets = self.learner.get_preds(
-                ds_idx, reorder=False)
+                ds_idx, reorder=True)
         y_pred, y_unc = self.normalizer.decode(
             preds,
             uncertainty=self.train_config['uncertainty'],
