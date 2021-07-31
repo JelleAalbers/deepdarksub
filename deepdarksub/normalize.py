@@ -23,8 +23,9 @@ class Normalizer:
 
         if meta is None:
             assert means is not None, "Provide either meta or means/scales"
-            self.means = means
-            self.scales = scales
+            # Only keep means/scales for parameters we are fitting
+            self.means = {p: means[p] for p in fit_parameters}
+            self.scales = {p: scales[p] for p in fit_parameters}
 
         else:
             self.means = {p: np.mean(meta[p]) for p in fit_parameters}
@@ -37,10 +38,9 @@ class Normalizer:
             for (p1, p2) in (('e1', 'e2'),
                              ('gamma1', 'gamma2'),
                              ('center_x', 'center_y')):
-                # p1, p2 = ['main_deflector_parameters_' + p for p in (p1, p2)]
                 self.means[p1] = self.means[p2] = 0
                 self.scales[p1] = self.scales[p2] = \
-                    (self.scales[p1] + self.scales[p2]) / 2
+                    (self.scales.get(p1, 1) + self.scales.get(p2, 1)) / 2
 
     def norm(self, x, param_name, _reverse=False):
         """Normalize x values representing param_name"""

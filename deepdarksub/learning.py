@@ -142,7 +142,8 @@ def data_block(
             for x in (
                 'e1', 'e2',
                 'gamma1', 'gamma2',
-                'center_x', 'center_y')})
+                'center_x', 'center_y')
+            if x in fit_parameters})
 
         @fv.Rotate
         def encodes(self, o: MyLabel, _i=_index_of):
@@ -155,9 +156,12 @@ def data_block(
             sin_2q = 2 * sin_q * cos_q
             cos_2q = 2 * cos_q**2 - 1
 
-            _rotate_inplace(o, _i['e1'], _i['e2'], cos_2q, sin_2q)
-            _rotate_inplace(o, _i['gamma1'], _i['gamma2'], cos_2q, sin_2q)
-            _rotate_inplace(o, _i['center_x'], _i['center_y'], cos_q, sin_q)
+            if 'e1' in _i and 'e2' in i:
+                _rotate_inplace(o, _i['e1'], _i['e2'], cos_2q, sin_2q)
+            if 'gamma1' in _i and 'gamma2' in i:
+                _rotate_inplace(o, _i['gamma1'], _i['gamma2'], cos_2q, sin_2q)
+            if 'center_x' in _i and 'center_y' in i:
+                _rotate_inplace(o, _i['center_x'], _i['center_y'], cos_q, sin_q)
 
             return o
 
