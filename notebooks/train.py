@@ -31,6 +31,9 @@ parser.add_argument(
     '--lr', default=0.1,
     help='Base learning rate to use')
 parser.add_argument(
+    '--dropout', default=0.5, type=float,
+    help='Dropout to use in the final layer (fastAI default is 0.5)')
+parser.add_argument(
     '--truncate_final', action='store_true',
     help="Truncate the final parameter's posterior to be >= 0")
 parser.add_argument(
@@ -94,6 +97,7 @@ train_config = dict(
     n_epochs = args.epochs,
     architecture = args.architecture,
     bn_final = True,
+    dropout_p = args.dropout_p,
     base_lr = args.lr)
 
 if train_config['uncertainty'] == 'correlated':

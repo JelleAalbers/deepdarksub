@@ -188,6 +188,7 @@ class Model:
                 parameter_weights=tc.get('parameter_weights')),
             metrics=self.metrics,
             pretrained=False,
+            ps=tc.get('dropout_p', 0.5),
             cbs=[self.dropout_switch],
             bn_final=tc['bn_final'])
 
