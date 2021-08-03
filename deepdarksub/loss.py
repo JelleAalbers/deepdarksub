@@ -72,8 +72,8 @@ class WeightedLoss(fv.nn.Module):
         """Return term to be added to -2 log L loss for truncating the
         estimated posterior of a fit_parameter with to non-negative physical
         values.
-        
-        If the posterior is >90% out of range, only part of the normalization will 
+
+        If the posterior is >90% out of range, only part of the normalization will
         be compensated. This helps avoid
           (a) NAN NAN NAN when starting training
           (b) ridiculously low predictions
@@ -82,8 +82,7 @@ class WeightedLoss(fv.nn.Module):
          - mean: Predicted mean
          - std: Predicted std
         """
-        if self.truncate_final_to is None:
-            return 0.
+        assert self.truncate_final_to
         # 1 - Normal(mean,std).CDF(0)
         f_above = 1 - 0.5 * (1 + torch.erf((self.truncate_final_to - mean)
                                            /(std * 2**0.5)))
@@ -95,10 +94,12 @@ class WeightedLoss(fv.nn.Module):
 
     def loss(self, x, y):
         assert x.shape == y.shape
-        return (
-            torch.sum((x - y)**2 * self.parameter_weights[None,:],
-                      dim=1)
-            + self.truncation_term(mean=x[:,-1]))
+        result = torch.sum((x - y)**2 * self.parameter_weights[None,:],
+                           dim=1)
+
+        if self.truncate_final_to:
+            result += self.truncation_term(mean=x[:,-1])
+        return result
 
 
 @export
@@ -128,7 +129,8 @@ class UncertaintyLoss(WeightedLoss):
             torch.log(x_unc) * self.parameter_weights[None,:],
             dim=1)
 
-        loss += self.truncation_term(mean=x[:,-1], std=x_unc[:,-1])
+        if self.truncate_final_to:
+            loss += self.truncation_term(mean=x[:,-1], std=x_unc[:,-1])
 
         return loss
 
@@ -165,7 +167,8 @@ class CorrelatedUncertaintyLoss(WeightedLoss):
         # See https://math.stackexchange.com/a/3211183, or just try it out:
         #   L = np.tril(np.random.rand(13,13))
         #   L[-1, -1]**-1, dds.cov_to_std(dds.L_to_cov(L))[0][-1]
-        loss += self.truncation_term(mean=x_p[:, -1], std=L[:, -1, -1]**-1)
+        if self.truncate_final_to:
+            loss += self.truncation_term(mean=x_p[:, -1], std=L[:, -1, -1]**-1)
 
         # Clip the loss to avoid insanely high values, common at initialization.
         # Do it gently, so we can still learn from saturating examples.
