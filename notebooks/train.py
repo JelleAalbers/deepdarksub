@@ -31,7 +31,7 @@ parser.add_argument(
     '--lr', default=0.1,
     help='Base learning rate to use')
 parser.add_argument(
-    '--dropout', default=0.5, type=float,
+    '--dropout_p', default=0.5, type=float,
     help='Dropout to use in the final layer (fastAI default is 0.5)')
 parser.add_argument(
     '--truncate_final', action='store_true',
