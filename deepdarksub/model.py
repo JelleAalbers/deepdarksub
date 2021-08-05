@@ -297,6 +297,7 @@ class Model:
                     as_dict=True,
                     tta=0,
                     tta_beta=0.,
+                    with_dropout=False,
                     short_names=True):
         """Return (pred=..., unc=..., true=...) for validation or training data.
 
@@ -306,19 +307,22 @@ class Model:
             as_dict: If True, ... in return value is a dict of arrays,
                 (one per param), otherwise a 2d array (param order matches
                 self.fit_parameters).
+            with_dropout: If True, activate dropout
+                (will partially randomizes prediction)
             short_names: If True, dicts will use short-form parameter names
             tta: if 0 (default), disable test-time augmentation (TTA).
                 otherwise, return average of this many TTA runs.
         """
         ds_idx = 0 if dataset == 'train' else 1
-        if tta:
-            # TTA already has shuffle=False
-            preds, targets = self.learner.tta(
-                ds_idx, n=tta, beta=tta_beta)
-        else:
-            # reorder=True means undo shuffling, get back normal order
-            preds, targets = self.learner.get_preds(
-                ds_idx, reorder=True)
+        with self.dropout_switch.active(with_dropout):
+            if tta:
+                # TTA already has shuffle=False
+                preds, targets = self.learner.tta(
+                    ds_idx, n=tta, beta=tta_beta)
+            else:
+                # reorder=True means undo shuffling, get back normal order
+                preds, targets = self.learner.get_preds(
+                    ds_idx, reorder=True)
         y_pred, y_unc = self.normalizer.decode(
             preds,
             uncertainty=self.train_config['uncertainty'],

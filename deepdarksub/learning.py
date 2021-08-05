@@ -241,7 +241,7 @@ class TestTimeDropout(fv.Callback):
             yield
             return
         if p_mult is True:
-            p_mult == 1.
+            p_mult = 1.
 
         _orig_ps = {mod: mod.p
                     for mod in self.dropout_modules()}
