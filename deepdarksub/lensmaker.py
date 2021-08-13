@@ -101,9 +101,12 @@ class LensMaker:
 
         # Collect subhalo metadata
         df_sub = pd.DataFrame([l[1] for l in subhalo_lenses])
-        df_sub['m'] = subhalo_meta['mass'][0][2]
-        df_sub['c'] = subhalo_meta['concentration'][0][2]
-        df_sub['z'] = self.z_lens
+        if len(df_sub):
+            df_sub['m'] = subhalo_meta['mass'][0][2]
+            df_sub['c'] = subhalo_meta['concentration'][0][2]
+            df_sub['z'] = self.z_lens
+        else:
+            df_sub['m'] = df_sub['c'] = df_sub['z'] = []
 
         # Collect LOS metadata
         _from_los = []
