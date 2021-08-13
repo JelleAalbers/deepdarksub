@@ -13,7 +13,6 @@ __all__.extend(['parameter_colors', 'parameter_labels'])
 parameter_colors = {
     'theta_E': 'g',
     'sigma_sub': 'b',
-    'log_sigma_sub': 'b',
     'delta_los': 'darkorange',
     'center_x': 'magenta', 'center_y': 'magenta',
     'gamma': 'purple',
