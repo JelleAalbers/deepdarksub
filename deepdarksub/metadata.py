@@ -8,6 +8,7 @@ import pandas as pd
 import deepdarksub as dds
 import manada
 export, __all__ = dds.exporter()
+__all__.extend(['val_galaxies'])
 
 
 def _load_csv(fn, filename_prefix=''):
