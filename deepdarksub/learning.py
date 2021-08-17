@@ -156,11 +156,11 @@ def data_block(
             sin_2q = 2 * sin_q * cos_q
             cos_2q = 2 * cos_q**2 - 1
 
-            if 'e1' in _i and 'e2' in i:
+            if 'e1' in _i and 'e2' in _i:
                 _rotate_inplace(o, _i['e1'], _i['e2'], cos_2q, sin_2q)
-            if 'gamma1' in _i and 'gamma2' in i:
+            if 'gamma1' in _i and 'gamma2' in _i:
                 _rotate_inplace(o, _i['gamma1'], _i['gamma2'], cos_2q, sin_2q)
-            if 'center_x' in _i and 'center_y' in i:
+            if 'center_x' in _i and 'center_y' in _i:
                 _rotate_inplace(o, _i['center_x'], _i['center_y'], cos_q, sin_q)
 
             return o
@@ -241,7 +241,7 @@ class TestTimeDropout(fv.Callback):
             yield
             return
         if p_mult is True:
-            p_mult == 1.
+            p_mult = 1.
 
         _orig_ps = {mod: mod.p
                     for mod in self.dropout_modules()}

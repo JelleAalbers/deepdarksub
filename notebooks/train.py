@@ -31,7 +31,7 @@ parser.add_argument(
     '--lr', default=0.1,
     help='Base learning rate to use')
 parser.add_argument(
-    '--dropout', default=0.5, type=float,
+    '--dropout_p', default=0.5, type=float,
     help='Dropout to use in the final layer (fastAI default is 0.5)')
 parser.add_argument(
     '--truncate_final', action='store_true',
@@ -74,6 +74,16 @@ fit_parameters = [
     'log_' + p if p in args.log else p
     for p in fit_parameters]
 
+for pname in fit_parameters:
+    if 'sigma_sub' in pname:
+        # Give sigma_sub 10x weight in the loss
+        # (only if diagonal or no unc.)
+        parameter_weights = dict(pnam =10)
+        break
+else:
+    # No sigma_sub
+    parameter_weights = dict()
+
 
 train_config = dict(
     dataset_name = args.dataset,
@@ -83,11 +93,9 @@ train_config = dict(
     batch_size = args.batch_size,
     truncate_final = args.truncate_final,
 
-    parameter_weights={
-        'subhalo_parameters_sigma_sub': 10,
-    },
+    parameter_weights = parameter_weights,
 
-    lr_schedule={
+    lr_schedule = {
         'pct_start': args.pct_start
     },
     architecture_options = {
