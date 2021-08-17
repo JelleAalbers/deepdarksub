@@ -8,13 +8,14 @@ import tempfile
 
 import fastai.vision.all as fv
 import numpy as np
+from skimage.transform import rotate
 import torch
 import torchvision.transforms.functional
 from tqdm import tqdm
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
-__all__.extend(['short_names', 'log_able_params'])
+__all__.extend(['short_names', 'log_able_params', 'long_names'])
 
 
 mdef = 'main_deflector_parameters_'
@@ -30,6 +31,7 @@ short_names = dict((
     (mdef + 'gamma2', 'gamma2'),
     (mdef + 'e1', 'e1'),
     (mdef + 'e2', 'e2')))
+long_names = {v: k for k, v in short_names.items()}
 
 
 @export
@@ -327,7 +329,8 @@ class Model:
             targets[:,:self.n_params],
             as_dict=as_dict)
         return {
-            label: self._shorten_dict(x) if as_dict and short_names and isinstance(x, dict)
+            label: self._shorten_dict(x)
+                   if as_dict and short_names and isinstance(x, dict)
                    else x
             for label, x in [('pred', y_pred),
                              ('unc', y_unc),
@@ -343,6 +346,52 @@ class Model:
             if new_pname.startswith('log_'):
                 result[new_pname[4:]] = np.exp(val)
         return result
+
+    def deterministic_tta(self,
+            input_list,
+            as_dict=True,
+            progress=True,
+            n_tta=16):
+        """Return (predictions, uncertainty) averaged over n_tta runs through
+        the model, each rotated a 1/n_tta turns further.
+        """
+        # Cajole the inputs into a list of numpy arrays
+        # (exactly the opposite from predict_many)
+        if isinstance(input_list, (str, Path, np.ndarray)):
+            input_list = [input_list]
+        orig_imgs = [np.load(f) if isinstance(f, (str, Path)) else f
+                    for f in input_list]
+
+        tta_angles = np.linspace(0, 360, n_tta + 1)[:-1]
+        if progress:
+            tta_angles = tqdm(tta_angles)
+        preds_tta = []
+        for angle in tta_angles:
+            # Save rotated images to temporary dir,
+            # then run the model on them.
+            # TODO: this seems quite inefficient, and does not rotate the
+            # labels back! We should look into some fastai way of doing it...
+            with tempfile.TemporaryDirectory() as tempdir:
+                temp_files = [
+                    Path(tempdir) / ('%08d.npy' % i)
+                    for i in range(len(input_list))]
+                for img, f in zip(orig_imgs, temp_files):
+                    np.save(f, rotate(img, angle))
+
+                preds_tta.append(self.predict_many(
+                    temp_files, as_dict=False, progress=False))
+
+        # Take means of both prediction and uncertainty
+        tta_means = [
+            np.mean([x[i] for x in preds_tta], axis=0)
+            for i in range(len(preds_tta[0]))]
+
+        # Convert predictions to dict
+        # TODO: do same for uncertainty if we're using a diagonal loss
+        if as_dict:
+            tta_means[0] = self._shorten_dict(
+                self.normalizer.array_to_dict(tta_means[0]))
+        return tta_means
 
     def attribute(
             self,
