@@ -11,7 +11,8 @@ parameter_domains = {
     # since it crashes lognormal priors.
     'theta_E': (np.exp(-5), 2.),
     'log_theta_E': (-5, np.log(2)),
-    'sigma_sub': (np.exp(-5), 1.),
+    # TODO: 1e-2 here is for the high-mass pivot point... disable for low mass
+    'sigma_sub': (-0.006, 0.008),
     'log_sigma_sub': (-5, 0),
     'delta_los': (np.exp(-5), 5.),
     'log_delta_los': (-5, np.log(5)),
@@ -150,7 +151,7 @@ class Inference:
     def find_mles(self, preds, precs,
                   params=None, verbose=True,
                   lr_start=1e-3, lr_stop=1e-7, patience=50,
-                  max_iter=30_000):
+                  max_iter=30_000, report_each=1000):
         """Return array of maximum likelihood estimates, same shape as preds"""
         if params is None:
             params = self.fit_parameters
@@ -170,7 +171,7 @@ class Inference:
 
             ll = self._log_likelihood(mle_t, preds_t, precs_t, params=params)
 
-            if i % 1000 == 0:
+            if i % report_each == 0:
                 mean_ll = ll.mean().detach().numpy()
                 print(i, mean_ll) if verbose else 0
                 if last_mean_ll and last_mean_ll > mean_ll:

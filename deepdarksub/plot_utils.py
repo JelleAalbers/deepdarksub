@@ -21,7 +21,6 @@ parameter_colors = {
 parameter_labels = {
     'theta_E': r'$\theta_E$',
     'sigma_sub': r'$\Sigma_\mathrm{sub}$',
-    'log_sigma_sub': r'$\log \Sigma_\mathrm{sub}$',
     'delta_los': r'$\delta_\mathrm{los}$',
     'center_x': r'$x$', 'center_y': r'$y$',
     'gamma': r'$\gamma$',

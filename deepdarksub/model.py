@@ -23,6 +23,7 @@ log_able_params = ('theta_E', 'sigma_sub', 'delta_los', 'gamma')
 short_names = dict((
     (mdef + 'theta_E', 'theta_E'),
     ('subhalo_parameters_sigma_sub', 'sigma_sub'),
+    ('subhalo_parameters_shmf_plaw_index', 'shmf_plaw_index'),
     ('los_parameters_delta_los', 'delta_los'),
     (mdef + 'center_x', 'center_x'),
     (mdef + 'center_y', 'center_y'),
@@ -591,7 +592,7 @@ def load_training_log(fn):
     # Old logs did not store n_training images;
     # 0.956 is the training fraction for dl_ss_npy and more_500k.
     n_training = r.get('n_training_images', r['n_images'] * 0.956)
-    r['training_images_seen'] = np.arange(n_epochs) * n_training / 1e6
+    r['training_images_seen'] = (1 + np.arange(n_epochs)) * n_training / 1e6
 
     return r
 
