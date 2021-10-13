@@ -291,8 +291,8 @@ class LensMaker:
                 img += self.single_band.noise_for_model(img)
             return img, None
 
-        if noise_seed == 'random':
-            noise_context = contextlib.nullcontext
+        if noise_seed in ('random', None):
+            noise_context = contextlib.nullcontext()
         else:
             noise_context = dds.temp_numpy_seed(noise_seed)
 
