@@ -17,7 +17,7 @@ def load_manada_config(x=None):
         return x
     if x is None:
         # Load a default config
-        x = 'config_d_los_sigma_sub'
+        x = 'config_amp_and_slope'
 
     if x.endswith('.py'):
         # This is a path to a config

@@ -1,7 +1,12 @@
+import contextlib
+
 import lenstronomy as ls
-from manada.Utils.cosmology_utils import get_cosmology
 import numpy as np
 import pandas as pd
+
+from manada import generate as manada_generate
+from manada.Sampling.sampler import Sampler
+from manada.Utils.cosmology_utils import get_cosmology
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
@@ -44,7 +49,7 @@ class LensMaker:
         main_deflector_parameters = {
             **dds.take_config_medians(c['main_deflector']['parameters']),
             **main_deflector_parameters}
-        models = c['main_deflector']['models']
+        models = ('PEMD', 'SHEAR')   # TODO: nicer not to hardcode...
         return self._to_lens_list(
             models,
             [{k: v
@@ -238,7 +243,7 @@ class LensMaker:
         return lens_model, lens_kwargs
 
     def lensed_image(self, lenses=None, catalog_i=None, phi=None,
-                     noise_seed=42, mask_radius=None):
+                     noise_seed='random', mask_radius=None):
         """Return numpy array describing lensed image
 
         Args:
@@ -264,33 +269,50 @@ class LensMaker:
 
         source_model_class, kwargs_source = self.catalog.draw_source(
             catalog_i=catalog_i,
-            phi=phi,
-            z_new=self.z_source)
+            phi=phi)
 
-        img = ls.ImageModel(
-                # Several arguments are called '...class', but expect instances!
-                data_class=ls.ImageData(**ls.data_configure_simple(
-                    numPix=self.n_pixels,
-                    deltaPix=self.pixel_width)),
-                # Manada instead uses:
-                # data_class=ls.DataAPI(
-                #     numpix=self.n_pixels,
-                #     **self.config_dict['detector']['parameters']).data_class,
-                # Is there a difference?
-                psf_class=ls.Data.psf.PSF(
-                    **self.config_dict['psf']['parameters']),
-                lens_model_class=lens_model,
-                source_model_class=ls.LightModel_(source_model_class),
-                kwargs_numerics=self.manada_config.kwargs_numerics,
-            ).image(
-                kwargs_lens=lens_kwargs,
-                kwargs_source=kwargs_source)
+        # Monkeypatch manada's draw_image with our own routine,
+        # so we don't have to duplicate the stuff in draw_drizzled_image.
+        def draw_image(
+                # Optional snarky comment about keyword arguments here
+                sample,los_class,subhalo_class,main_deflector_class,
+                source_class,numpix,multi_plane,kwargs_numerics,mag_cut,add_noise,
+                apply_psf=True):
+            img = ls.ImageModel(
+                    data_class=ls.DataAPI(numpix=numpix, **sample['detector_parameters']).data_class,
+                    psf_class=ls.Data.psf.PSF(**(sample['psf_parameters'] if apply_psf else dict(psf_type='NONE'))),
+                    lens_model_class=lens_model,
+                    source_model_class=ls.LightModel_(source_model_class),
+                    kwargs_numerics=kwargs_numerics,
+                ).image(
+                    kwargs_lens=lens_kwargs,
+                    kwargs_source=kwargs_source)
+            if add_noise:
+                img += self.single_band.noise_for_model(img)
+            return img, None
 
         if noise_seed == 'random':
-            img += self.single_band.noise_for_model(img)
-        elif noise_seed is not None:
-            with dds.temp_numpy_seed(noise_seed):
-                img += self.single_band.noise_for_model(img)
+            noise_context = contextlib.nullcontext
+        else:
+            noise_context = dds.temp_numpy_seed(noise_seed)
+
+        vanilla_draw_image = manada_generate.draw_image
+        with noise_context:
+            try:
+                manada_generate.draw_image = draw_image
+                img, _ = manada_generate.draw_drizzled_image(
+                    sample=Sampler(self.config_dict).sample(),
+                    los_class=None,
+                    subhalo_class=None,
+                    main_deflector_class=None,
+                    source_class=None,
+                    numpix=self.n_pixels,
+                    multi_plane=True,
+                    kwargs_numerics=self.manada_config.kwargs_numerics,
+                    mag_cut=None,
+                    add_noise=noise_seed is not None)
+            finally:
+                manada_generate.draw_image = vanilla_draw_image
 
         if mask_radius is None:
             mask_radius = getattr(self.manada_config, 'mask_radius', None)

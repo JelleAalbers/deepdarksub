@@ -10,12 +10,19 @@ parameter_domains = {
     # Note theta_E, sigma_sub, etc = 0 are disallowed,
     # since it crashes lognormal priors.
     'theta_E': (np.exp(-5), 2.),
+
     'log_theta_E': (-5, np.log(2)),
+
     # TODO: 1e-2 here is for the high-mass pivot point... disable for low mass
     'sigma_sub': (-0.006, 0.008),
+
+    'shmf_plaw_index': (-3, -1),
+
     'log_sigma_sub': (-5, 0),
+
     'delta_los': (np.exp(-5), 5.),
     'log_delta_los': (-5, np.log(5)),
+
     'gamma': (1., 3.),
     'log_gamma': (np.log(1), np.log(3)),
 
@@ -46,7 +53,9 @@ class Inference:
                 if pname in dds.short_names.values() and callable(val):
                     dist = val.__self__
                     dist_name = dist.dist.name
-                    if dist_name == 'norm':
+                    if dist_name in ('norm', 'truncnorm'):
+                        # Manada's truncnorms are just norms, the truncation
+                        # happens at -7 sigma or something.
                         self.prior_dists[pname] = torch.distributions.Normal(
                             dist.mean(), dist.std())
                     elif dist_name == 'lognorm':

@@ -14,13 +14,15 @@ parameter_colors = {
     'theta_E': 'g',
     'sigma_sub': 'b',
     'delta_los': 'darkorange',
+    'shmf_plaw_index': 'saddlebrown',
     'center_x': 'magenta', 'center_y': 'magenta',
     'gamma': 'purple',
     'e1': 'crimson', 'e2': 'crimson',
-    'gamma1': 'saddlebrown', 'gamma2': 'saddlebrown'}
+    'gamma1': 'cyan', 'gamma2': 'cyan'}
 parameter_labels = {
     'theta_E': r'$\theta_E$',
     'sigma_sub': r'$\Sigma_\mathrm{sub}$',
+    'shmf_plaw_index': r'$\gamma_\mathrm{SHMF}$',
     'delta_los': r'$\delta_\mathrm{los}$',
     'center_x': r'$x$', 'center_y': r'$y$',
     'gamma': r'$\gamma$',

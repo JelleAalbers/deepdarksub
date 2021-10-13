@@ -303,7 +303,8 @@ def make_dummy_dataset(dirname='dummy_dataset', n_images=20):
 
     dummy_meta = {
         'main_deflector_parameters_theta_E': 1.,
-        'subhalo_parameters_sigma_sub': 0.1,
+        'subhalo_parameters_sigma_sub': 0.1e-2,
+        'subhalo_parameters_shmf_plaw_index': -1.7,
         'los_parameters_delta_los': 0.1,
         'main_deflector_parameters_center_x': 0.01,
         'main_deflector_parameters_center_y': 0.01,
