@@ -9,29 +9,22 @@ __all__.extend(['parameter_domains'])
 parameter_domains = {
     # Note theta_E, sigma_sub, etc = 0 are disallowed,
     # since it crashes lognormal priors.
-    'theta_E': (np.exp(-5), 2.),
+    'theta_E': (0, 2.),
 
-    'log_theta_E': (-5, np.log(2)),
-
-    # TODO: 1e-2 here is for the high-mass pivot point... disable for low mass
-    'sigma_sub': (-0.006, 0.008),
-
+    'sigma_sub': (0, 0.008),
     'shmf_plaw_index': (-3, -1),
 
-    'log_sigma_sub': (-5, 0),
-
-    'delta_los': (np.exp(-5), 5.),
-    'log_delta_los': (-5, np.log(5)),
+    'delta_los': (0, 5.),
 
     'gamma': (1., 3.),
     'log_gamma': (np.log(1), np.log(3)),
 
-    'center_x': (-1, 1),
-    'center_y': (-1, 1),
-    'gamma1': (-1, 1),
-    'gamma2': (-1, 1),
-    'e1': (-1, 1),
-    'e2': (-1, 1),
+    'center_x': (-.4, .4),
+    'center_y': (-.4, 1),
+    'gamma1': (-.4, .4),
+    'gamma2': (-.4, .4),
+    'e1': (-.4, .4),
+    'e2': (-.4, .4),
 }
 
 
