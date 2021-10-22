@@ -9,7 +9,7 @@ parser.add_argument(
     '--epochs', type=int, default=1,
     help="Number of training epochs (default 1)")
 parser.add_argument(
-    '--batch_size', type=int, default=1024,
+    '--batch_size', type=int, default=256,
     help="Batch size to use")
 parser.add_argument(
     '--widen', type=float, default=1.,
@@ -51,7 +51,7 @@ import deepdarksub as dds
 print("Imports done")
 
 SCRATCH = os.getenv('SCRATCH')    # Where training data zips are
-LSCRATCH = os.getenv('LSCRATCH')  # Where to unzip (will make subfolder)
+#LSCRATCH = os.getenv('LSCRATCH')  # Where to unzip (will make subfolder)
 Path('./plots').mkdir(exist_ok=True)
 
 
@@ -65,14 +65,16 @@ fit_parameters = (
     'main_deflector_parameters_e2',
     'main_deflector_parameters_theta_E',
     'los_parameters_delta_los',
+    'subhalo_parameters_shmf_plaw_index',
     'subhalo_parameters_sigma_sub')
 # Use short names when possible
 fit_parameters = [
     dds.short_names.get(p, p)
     for p in fit_parameters]
-fit_parameters = [
-    'log_' + p if p in args.log else p
-    for p in fit_parameters]
+if args.log:
+    fit_parameters = [
+        'log_' + p if p in args.log else p
+        for p in fit_parameters]
 
 for pname in fit_parameters:
     if 'sigma_sub' in pname:
@@ -112,13 +114,13 @@ if train_config['uncertainty'] == 'correlated':
     # Haven't implemented weighting yet
     del train_config['parameter_weights']
 
-data_dir = Path(LSCRATCH) / train_config['dataset_name']
-if not data_dir.exists():
-    print(f"Extracting training data to {data_dir} (will take a minute or so)")
-    command = f'7z x {SCRATCH}/{train_config["dataset_name"]}.zip -o{LSCRATCH}'
-    dds.run_command(command)
-
-model = dds.Model(**train_config, base_dir=LSCRATCH)
+# data_dir = Path(LSCRATCH) / train_config['dataset_name']
+# if not data_dir.exists():
+#     print(f"Extracting training data to {data_dir} (will take a minute or so)")
+#     command = f'7z x {SCRATCH}/{train_config["dataset_name"]}.zip -o{LSCRATCH}'
+#     dds.run_command(command)
+# model = dds.Model(**train_config, base_dir=LSCRATCH)
+model = dds.Model(**train_config, base_dir=SCRATCH)
 
 if args.finetune:
     # Load earlier net, but keep final linear layer weights random
