@@ -340,3 +340,17 @@ def spy_on_method(object, method_name, results_dict, alias):
         return result
     setattr(object, method_name, spied_f)
 
+
+@export
+def density_levels(x, levels):
+    """return values of x at which sum(x < ...) = level
+
+    This is an 'inverse cdf' for multidimensional arrays.
+    x should already be normalized!
+    """
+    x_sorted = np.sort(x.ravel())
+    x_sorted_cs = np.cumsum(x_sorted)
+    level_indices = [
+        np.argmin(np.abs(x_sorted_cs - l))
+        for l in levels]
+    return x_sorted[level_indices]

@@ -20,7 +20,7 @@ parameter_domains = {
     'log_gamma': (np.log(1), np.log(3)),
 
     'center_x': (-.4, .4),
-    'center_y': (-.4, 1),
+    'center_y': (-.4, .4),
     'gamma1': (-.4, .4),
     'gamma2': (-.4, .4),
     'e1': (-.4, .4),
@@ -62,6 +62,13 @@ class Inference:
                             torch.distributions.Normal(mu, sigma)
                     else:
                         raise ValueError(f"Unknown distribution: {dist_name}")
+
+        self.prior_means = {
+            pname: self.prior_dists[pname].mean.item()
+            for pname in self.fit_parameters}
+        self.prior_stds = {
+            pname: self.prior_dists[pname].scale.item()
+            for pname in self.fit_parameters}
 
     def dict_to_stack(self, x, params=None):
         if params is None:
