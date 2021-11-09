@@ -93,6 +93,7 @@ class LensMaker:
     def manada_substructure(self,
             sigma_sub=0.1,
             delta_los=1.,
+            shmf_plaw_index=-1.9,
             los_mode='subtract_average',
             **main_deflector_parameters):
         """Return (list of subhalo lenses, dataframe with metadata)
@@ -102,7 +103,9 @@ class LensMaker:
         los_lenses, los_meta = self.manada_los(
             delta_los=delta_los, mode=los_mode, **main_deflector_parameters)
         subhalo_lenses, subhalo_meta = self.manada_subhalos(
-            sigma_sub=sigma_sub, **main_deflector_parameters)
+            sigma_sub=sigma_sub,
+            shmf_plaw_index=shmf_plaw_index,
+            **main_deflector_parameters)
 
         # Collect subhalo metadata
         df_sub = pd.DataFrame([l[1] for l in subhalo_lenses])
@@ -166,12 +169,15 @@ class LensMaker:
 
     def manada_subhalos(self,
                         sigma_sub=0.1,
+                        shmf_plaw_index=-1.9,
                         **main_deflector_parameters):
         """Return list of subhalo lenses (model, kwargs pairs), metadata dict"""
         c = self.config_dict
         subhalo_maker = c['subhalo']['class'](
 			subhalo_parameters={**c['subhalo']['parameters'],
-                                'sigma_sub': sigma_sub},
+                                'sigma_sub': sigma_sub,
+                                'shmf_plaw_index': shmf_plaw_index
+                                },
             **self._common_substructure_kwargs(main_deflector_parameters))
 
         # Steal mass/concentration info from manada...

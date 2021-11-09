@@ -28,8 +28,8 @@ class Normalizer:
             self.scales = {p: scales[p] for p in fit_parameters}
 
         else:
-            self.means = {p: np.mean(meta[p]) for p in fit_parameters}
-            self.scales = {p: np.std(meta[p]) for p in fit_parameters}
+            self.means = {p: np.mean(meta[p].values) for p in fit_parameters}
+            self.scales = {p: np.std(meta[p].values) for p in fit_parameters}
 
             # For two-component parameters that rotate during augmentation,
             # apply a single scale and no mean shift.
