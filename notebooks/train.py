@@ -58,14 +58,14 @@ Path('./plots').mkdir(exist_ok=True)
 fit_parameters = (
     'main_deflector_parameters_center_x',
     'main_deflector_parameters_center_y',
-    'main_deflector_parameters_gamma',
+    #'main_deflector_parameters_gamma',
     'main_deflector_parameters_gamma1',
     'main_deflector_parameters_gamma2',
     'main_deflector_parameters_e1',
     'main_deflector_parameters_e2',
     'main_deflector_parameters_theta_E',
-    'los_parameters_delta_los',
-    'subhalo_parameters_shmf_plaw_index',
+    #'los_parameters_delta_los',
+    #'subhalo_parameters_shmf_plaw_index',
     'subhalo_parameters_sigma_sub')
 # Use short names when possible
 fit_parameters = [
