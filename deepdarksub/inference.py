@@ -60,6 +60,10 @@ class Inference:
                             torch.distributions.LogNormal(mu, sigma)
                         self.prior_dists['log_' + pname] = \
                             torch.distributions.Normal(mu, sigma)
+                    elif dist_name == 'uniform':
+                        loc, scale = dist.kwds['loc'], dist.kwds['scale']
+                        low, high = loc, loc + scale
+                        self.prior_dists[pname] = torch.distributions.Uniform(low, high)
                     else:
                         raise ValueError(f"Unknown distribution: {dist_name}")
 
