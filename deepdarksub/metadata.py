@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 import deepdarksub as dds
-import manada
+import paltas
 export, __all__ = dds.exporter()
 __all__.extend(['val_galaxies'])
 
@@ -14,7 +14,7 @@ __all__.extend(['val_galaxies'])
 def _load_csv(fn, filename_prefix=''):
     meta = pd.read_csv(fn)
     if 'filename' not in meta:
-        # Directly from manada: add filename
+        # Directly from paltas: add filename
         meta['image_number'] = np.arange(len(meta))
         meta['filename'] = [filename_prefix + f'{x:07d}.npy'
                             for x in meta['image_number'].values]
@@ -67,9 +67,9 @@ def load_metadata(
         filename_prefix='image_',
         verbose=True,
         remove_bad=True):
-    """Load manada's metadata from data_dir
+    """Load paltas's metadata from data_dir
 
-    :param data_dir: string or Path to manada dataset folder
+    :param data_dir: string or Path to paltas dataset folder
     :param bad_galaxies: COSMOS catalog indices of galaxies to remove
     :param val_galaxies: COSMOS catalog indices of galaxies to use
         in the validation set
@@ -88,6 +88,14 @@ def load_metadata(
         for subdir in sorted(Path(data_dir).glob('*')):
             if not osp.isdir(str(subdir)):
                 continue
+            try:
+                int(subdir.name)
+            except Exception:
+                print(f"Ignoring subdir {subdir} with non-integer name")
+                continue
+            if not (subdir / 'metadata.csv').exists():
+                print(f"Ignoring subdir {subdir} without metadata")
+                continue
             m = _load_csv(subdir / 'metadata.csv',
                           subdir.stem + '/' + filename_prefix)
             metas.append(m)
@@ -105,7 +113,7 @@ def load_metadata(
     # Add extra columns from the source metadata
     try:
         lm = dds.LensMaker()   # quick access to cosmo and catalog
-    except FileNotFoundError as e:
+    except Exception as e:
         print(f"Could not load lensmaker, COSMOS dataset missing? "
               f"Metadata will lack detailed source galaxy info. "
               f"Original exception: {e}")
@@ -120,7 +128,7 @@ def load_metadata(
         meta['source_scaled_flux_radius'] = (
                 cat_meta['flux_radius']
                 * meta['source_z_scaling']
-                * manada.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH)
+                * paltas.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH)
 
         # Add Sersic fit info
         _fit_results = lm.catalog.catalog['sersicfit'].astype(np.float)
@@ -142,7 +150,7 @@ def load_metadata(
     meta['is_bad'] = np.in1d(meta['source_parameters_catalog_i'], gis['bad'])
     if remove_bad:
         meta = meta[~meta['is_bad']]
-    print(f"{len(gis['all'])} distinct source galaxies used by manada. ")
+    print(f"{len(gis['all'])} distinct source galaxies used by paltas. ")
 
     if val_split == 'by_galaxy':
         gis['val'] = np.array(val_galaxies)

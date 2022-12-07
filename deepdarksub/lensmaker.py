@@ -4,9 +4,9 @@ import lenstronomy as ls
 import numpy as np
 import pandas as pd
 
-from manada import generate as manada_generate
-from manada.Sampling.sampler import Sampler
-from manada.Utils.cosmology_utils import get_cosmology
+from paltas import generate as paltas_generate
+from paltas.Sampling.sampler import Sampler
+from paltas.Utils.cosmology_utils import get_cosmology
 
 import deepdarksub as dds
 export, __all__ = dds.exporter()
@@ -19,8 +19,8 @@ class LensMaker:
     """Utility for making single lensed images
     """
 
-    def __init__(self, manada_config=None):
-        self.manada_config = mc = dds.load_manada_config(manada_config)
+    def __init__(self, paltas_config=None):
+        self.paltas_config = mc = dds.load_paltas_config(paltas_config)
         c = self.config_dict = mc.config_dict
 
         # Image dimensions
@@ -43,7 +43,7 @@ class LensMaker:
         self.astropy_cosmology = get_cosmology(
             self.config_dict['cosmology']['parameters']).toAstropy()
 
-    def manada_main_deflector(self, **main_deflector_parameters):
+    def paltas_main_deflector(self, **main_deflector_parameters):
         """Return list of main deflector lenses (model, kwarg pairs)"""
         c = self.config_dict
         main_deflector_parameters = {
@@ -90,7 +90,7 @@ class LensMaker:
             zs = None
         return model_list, kwargs_list, zs
 
-    def manada_substructure(self,
+    def paltas_substructure(self,
             sigma_sub=0.1,
             delta_los=1.,
             shmf_plaw_index=-1.9,
@@ -98,11 +98,11 @@ class LensMaker:
             **main_deflector_parameters):
         """Return (list of subhalo lenses, dataframe with metadata)
 
-        See manada_los and manada_subhalos for arguments
+        See paltas_los and paltas_subhalos for arguments
         """
-        los_lenses, los_meta = self.manada_los(
+        los_lenses, los_meta = self.paltas_los(
             delta_los=delta_los, mode=los_mode, **main_deflector_parameters)
-        subhalo_lenses, subhalo_meta = self.manada_subhalos(
+        subhalo_lenses, subhalo_meta = self.paltas_subhalos(
             sigma_sub=sigma_sub,
             shmf_plaw_index=shmf_plaw_index,
             **main_deflector_parameters)
@@ -131,7 +131,7 @@ class LensMaker:
             (subhalo_lenses + los_lenses),
             pd.concat([df_sub, pd.DataFrame(_from_los)]).reset_index(drop=True))
 
-    def manada_los(self,
+    def paltas_los(self,
                    delta_los=1.,
                    mode='subtract_average',
                    **main_deflector_parameters):
@@ -152,7 +152,7 @@ class LensMaker:
                             **dict(delta_los=delta_los)},
 			**self._common_substructure_kwargs(main_deflector_parameters))
 
-        # Steal mass/concentration info from manada...
+        # Steal mass/concentration info from paltas...
         spy_reports = dict()
         dds.spy_on_method(los_maker, 'draw_nfw_masses',
                           spy_reports, 'mass')
@@ -167,7 +167,7 @@ class LensMaker:
             result.append(los_maker.calculate_average_alpha(self.n_pixels * 2))
         return sum([self._to_lens_list(*x) for x in result], []), spy_reports
 
-    def manada_subhalos(self,
+    def paltas_subhalos(self,
                         sigma_sub=0.1,
                         shmf_plaw_index=-1.9,
                         **main_deflector_parameters):
@@ -180,7 +180,7 @@ class LensMaker:
                                 },
             **self._common_substructure_kwargs(main_deflector_parameters))
 
-        # Steal mass/concentration info from manada...
+        # Steal mass/concentration info from paltas...
         spy_reports = dict()
         dds.spy_on_method(subhalo_maker, 'draw_nfw_masses',
                           spy_reports, 'mass')
@@ -258,12 +258,12 @@ class LensMaker:
                 If not provided, choose a random index.
             phi: rotation to apply to the source galaxy.
                 If not provided, choose a random angle or 0,
-                depending on manada's random_rotation option.
+                depending on paltas's random_rotation option.
             noise_seed: (temporary) seed to use during noise generation.
                 Set to 'random' to generate random noise (does not set seed),
                 set to None to disable noise altogether.
             mask_radius: arcseconds in the center to zero out.
-                If omitted, follow manada config.
+                If omitted, follow paltas config.
         """
         if lenses is None:
             # Do not lens
@@ -277,7 +277,7 @@ class LensMaker:
             catalog_i=catalog_i,
             phi=phi)
 
-        # Monkeypatch manada's draw_image with our own routine,
+        # Monkeypatch paltas's draw_image with our own routine,
         # so we don't have to duplicate the stuff in draw_drizzled_image.
         def draw_image(
                 # Optional snarky comment about keyword arguments here
@@ -302,11 +302,11 @@ class LensMaker:
         else:
             noise_context = dds.temp_numpy_seed(noise_seed)
 
-        vanilla_draw_image = manada_generate.draw_image
+        vanilla_draw_image = paltas_generate.draw_image
         with noise_context:
             try:
-                manada_generate.draw_image = draw_image
-                img, _ = manada_generate.draw_drizzled_image(
+                paltas_generate.draw_image = draw_image
+                img, _ = paltas_generate.draw_drizzled_image(
                     sample=Sampler(self.config_dict).sample(),
                     los_class=None,
                     subhalo_class=None,
@@ -314,14 +314,14 @@ class LensMaker:
                     source_class=None,
                     numpix=self.n_pixels,
                     multi_plane=True,
-                    kwargs_numerics=self.manada_config.kwargs_numerics,
+                    kwargs_numerics=self.paltas_config.kwargs_numerics,
                     mag_cut=None,
                     add_noise=noise_seed is not None)
             finally:
-                manada_generate.draw_image = vanilla_draw_image
+                paltas_generate.draw_image = vanilla_draw_image
 
         if mask_radius is None:
-            mask_radius = getattr(self.manada_config, 'mask_radius', None)
+            mask_radius = getattr(self.paltas_config, 'mask_radius', None)
         if mask_radius:
             x_grid, y_grid = np.meshgrid(*dds.image_grid(
                     img.shape,

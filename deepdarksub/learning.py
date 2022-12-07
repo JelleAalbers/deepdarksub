@@ -100,6 +100,7 @@ def data_block(
         meta, fit_parameters, data_dir,
         uncertainty,
         class_thresholds=None,
+        params_as_inputs=None,
         mask_dir=None,
         augment_rotation='free',
         rotation_pad_mode='zeros',
@@ -171,8 +172,6 @@ def data_block(
                         fit_parameters=fit_parameters,
                         label_class=MyLabel)
 
-    # Rotation augmentation makes fitting x, y, angles, etc. tricky!
-    # (would have to figure out how to transform labels...)
     batch_tfms = []
     if augment_rotation == 'free':
         batch_tfms += [fv.Rotate(p=1.,
@@ -191,23 +190,48 @@ def data_block(
     # Maybe related: https://github.com/fastai/fastai/issues/3250
     batch_tfms += [fv.Normalize(mean=torch.tensor(0.), std=torch.tensor(1.))]
 
-    return fv.DataBlock(
-        blocks=(fv.TransformBlock(
-                    type_tfms=NumpyImage.create,
-                    batch_tfms=[repeat_color] if do_repeat_color else []),
+    image_input_block = fv.TransformBlock(
+        type_tfms=NumpyImage.create,
+        batch_tfms=[repeat_color] if do_repeat_color else [])
+    splitter = fv.FuncSplitter(lambda fn: dds.meta_for_filename(meta, fn).is_val)
+
+    def get_filenames(_):
+        return tuple([
+            data_dir / fn
+            for fn in meta['filename'].values.tolist()])
+
+    if params_as_inputs is None:
+        return fv.DataBlock(
+            blocks=(image_input_block, out_block),
+            get_items=get_filenames,
+            get_y=get_y,
+            splitter=splitter,
+            batch_tfms=batch_tfms,
+            **kwargs)
+    else:
+        def filename_to_params_as_input(fn):
+            m = dds.meta_for_filename(meta, fn)
+            return fv.TensorBase([m[p] for p in params_as_inputs])
+
+        params_as_input_block = fv.TransformBlock(
+            type_tfms=filename_to_params_as_input)
+
+        return fv.DataBlock(
+            blocks=(
+                image_input_block, 
+                params_as_input_block,
                 out_block),
-        get_items=lambda _: tuple([data_dir / fn
-                                   for fn in meta['filename'].values.tolist()]),
-        get_y=get_y,
-        splitter=fv.FuncSplitter(lambda fn: dds.meta_for_filename(meta, fn).is_val),
-        batch_tfms=batch_tfms,
-        **kwargs)
+            n_inp=2,
+            get_items=get_filenames,
+            get_y=get_y,
+            splitter=splitter,
+            batch_tfms=batch_tfms,
+            **kwargs)
 
 
-def _get_y_regression(fn, *, meta, normalizer, fit_parameters, label_class):
+def _get_y_regression(fn, *, meta, fit_parameters, normalizer=None, label_class=fv.TensorBase):
     """Return list of desired outputs for image filename fn"""
     q = dds.meta_for_filename(meta, fn)
-
     y = [normalizer.norm(q[p], p) for p in fit_parameters]
     y += [q.training_weight]
     return label_class(y, fit_parameters=fit_parameters)

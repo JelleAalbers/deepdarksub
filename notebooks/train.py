@@ -28,7 +28,7 @@ parser.add_argument(
     help='Short names of fit parameters for which NN should '
          'predict log')
 parser.add_argument(
-    '--lr', default=0.1,
+    '--lr', default=0.1, type=float,
     help='Base learning rate to use')
 parser.add_argument(
     '--dropout_p', default=0.5, type=float,
@@ -50,15 +50,16 @@ import torch
 import deepdarksub as dds
 print("Imports done")
 
-SCRATCH = os.getenv('SCRATCH')    # Where training data zips are
-#LSCRATCH = os.getenv('LSCRATCH')  # Where to unzip (will make subfolder)
+SCRATCH = os.getenv('SCRATCH') or Path('.')    # Where training data zips are
+LSCRATCH = os.getenv('LSCRATCH') or Path('.')  # Where to unzip (will make subfolder)
+
 Path('./plots').mkdir(exist_ok=True)
 
 
 fit_parameters = (
     'main_deflector_parameters_center_x',
     'main_deflector_parameters_center_y',
-    #'main_deflector_parameters_gamma',
+    'main_deflector_parameters_gamma',
     'main_deflector_parameters_gamma1',
     'main_deflector_parameters_gamma2',
     'main_deflector_parameters_e1',
@@ -67,6 +68,11 @@ fit_parameters = (
     #'los_parameters_delta_los',
     #'subhalo_parameters_shmf_plaw_index',
     'subhalo_parameters_sigma_sub')
+
+params_as_inputs = (
+    'main_deflector_parameters_z_lens',
+    'source_parameters_z_source'
+)
 # Use short names when possible
 fit_parameters = [
     dds.short_names.get(p, p)
@@ -90,6 +96,7 @@ else:
 train_config = dict(
     dataset_name = args.dataset,
     fit_parameters = fit_parameters,
+    params_as_inputs = params_as_inputs,
     uncertainty = args.uncertainty,
     augment_rotation = 'free',
     batch_size = args.batch_size,
@@ -111,16 +118,16 @@ train_config = dict(
     base_lr = args.lr)
 
 if train_config['uncertainty'] == 'correlated':
-    # Haven't implemented weighting yet
+    # Haven't implemented weighting yet for correlated loss
     del train_config['parameter_weights']
 
-# data_dir = Path(LSCRATCH) / train_config['dataset_name']
-# if not data_dir.exists():
-#     print(f"Extracting training data to {data_dir} (will take a minute or so)")
-#     command = f'7z x {SCRATCH}/{train_config["dataset_name"]}.zip -o{LSCRATCH}'
-#     dds.run_command(command)
-# model = dds.Model(**train_config, base_dir=LSCRATCH)
-model = dds.Model(**train_config, base_dir=SCRATCH)
+data_dir = Path(LSCRATCH) / train_config['dataset_name']
+if not data_dir.exists():
+    print(f"Extracting training data to {data_dir} (will take a minute or so)")
+    command = f'7z x {SCRATCH}/{train_config["dataset_name"]}.zip -o{LSCRATCH}'
+    dds.run_command(command)
+model = dds.Model(**train_config, base_dir=LSCRATCH)
+#model = dds.Model(**train_config, base_dir=SCRATCH)
 
 if args.finetune:
     # Load earlier net, but keep final linear layer weights random

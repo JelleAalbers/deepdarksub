@@ -313,7 +313,8 @@ def make_dummy_dataset(dirname='dummy_dataset', n_images=20):
         'main_deflector_parameters_gamma2': 0.1,
         'main_deflector_parameters_e1': 0.1,
         'main_deflector_parameters_e2': 0.1,
-        'source_parameters_z_source': 1.}
+        'source_parameters_z_source': 1.,
+        'main_deflector_parameters_z_lens': 0.5}
     df = pd.DataFrame(
         {k: np.random.normal(1., .1, size=n_images) * v
          for k, v in dummy_meta.items()})

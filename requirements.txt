@@ -2,6 +2,6 @@ astropy
 fastai
 immutabledict
 lenstronomy
-manada
+paltas
 numpy
 scikit-image

@@ -1,4 +1,4 @@
-import manada
+import paltas
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -45,7 +45,7 @@ def save_plot(*plot_name, pdf=False, **kwargs):
 
 @export
 def image_grid(
-        shape, pixel_width=manada.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH,
+        shape, pixel_width=paltas.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH,
         x0=0, y0=0, edges=True):
     """Return x, y edges of image coordinates
 
@@ -66,7 +66,7 @@ def image_grid(
 
 @export
 def plot_image(img,
-               pixel_width=manada.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH,
+               pixel_width=paltas.Sources.cosmos.HUBBLE_ACS_PIXEL_WIDTH,
                log_scale=True,
                label='HST F814W',
                colorbar=True,

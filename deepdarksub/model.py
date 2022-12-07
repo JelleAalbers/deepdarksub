@@ -38,6 +38,8 @@ long_names = {v: k for k, v in short_names.items()}
 @export
 class Model:
 
+    learner: fv.Learner
+
     @classmethod
     def from_json(cls, filename, with_weights=True, **kwargs):
         """Build model using configuration from a json
@@ -107,6 +109,7 @@ class Model:
         tc.update(**kwargs)
 
         self.fit_parameters = tc['fit_parameters']
+        self.params_as_inputs = tc.get('params_as_inputs', [])
         self.n_params = len(self.fit_parameters)
         self.short_names = [dds.short_names.get(pname, pname)
                             for pname in self.fit_parameters]
@@ -151,6 +154,7 @@ class Model:
         self.data_block = dds.data_block(
             self.metadata,
             fit_parameters=tc['fit_parameters'],
+            params_as_inputs=tc['params_as_inputs'],
             data_dir=self.data_dir,
             uncertainty=tc['uncertainty'],
             augment_rotation=tc['augment_rotation'])
@@ -163,6 +167,8 @@ class Model:
             self.normalizer,
             self.short_names,
             self.train_config['uncertainty'])
+
+        n_out = dds.n_out(self.n_params, tc['uncertainty'])
 
         arch = getattr(fv, tc['architecture'])
         if 'architecture_options' in tc:
@@ -179,11 +185,11 @@ class Model:
             truncate_final_to = self.normalizer.norm(0, param_name=final_p)
             print(f"Truncating {final_p} to 0, encoded as {truncate_final_to}")
 
-        self.learner = fv.cnn_learner(
+        self.learner = fv.vision_learner(
             dls=self.data_loaders,
             arch=arch,
             n_in=1,
-            n_out=dds.n_out(self.n_params, tc['uncertainty']),
+            n_out=n_out,
             loss_func=dds.loss_for(
                 self.fit_parameters,
                 tc['uncertainty'],
@@ -191,9 +197,16 @@ class Model:
                 parameter_weights=tc.get('parameter_weights')),
             metrics=self.metrics,
             pretrained=False,
+            # 0.5 is the default as of fastai 2.7.10, Nov 2022
             ps=tc.get('dropout_p', 0.5),
             cbs=[self.dropout_switch],
             bn_final=tc['bn_final'])
+
+        if tc['params_as_inputs']:
+            # Replace the model with one that takes extra inputs
+            self.learner.model = ModelWithExtraInputs(
+                self.learner.model, 
+                n_params=len(tc['params_as_inputs']))
 
     def predict(self,
                 image,
@@ -653,3 +666,30 @@ def normalizer_defaults(dataset_name):
                 'main_deflector_parameters_gamma2': 1,
                 'main_deflector_parameters_e1': 1,
                 'main_deflector_parameters_e2': 1}}
+
+
+@export
+class ModelWithExtraInputs(torch.nn.Module):
+    def __init__(self, old_model, n_params):
+        super().__init__()
+        self.old_model = old_model
+        self.body = old_model[0]
+        head_layers = list(old_model[1].children())
+        # "neck" of pool and flatten layers"
+        self.neck = torch.nn.Sequential(*head_layers[:2])
+        # "head" with everything else
+        self.head = torch.nn.Sequential(*head_layers[2:])
+        self.n_params = n_params
+
+    def __getitem__(self, i):
+        # Dirty hack to make fastai's model splitting / variable
+        # learning rates work
+        return self.old_model[i]
+
+    def forward(self, imgs, fc_inputs):
+        neck_outputs = self.neck(self.body(imgs))
+        # Put the fc_inputs in place of a few neck-generated features
+        # ... whose filters will just not train at all.
+        # TODO: instead cat and generate a new head?
+        neck_outputs[:,:self.n_params] = fc_inputs
+        return self.head(neck_outputs)

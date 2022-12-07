@@ -11,10 +11,10 @@ with open('HISTORY.md') as file:
 
 setuptools.setup(
     name='deepdarksub',
-    version='0.0.0',
+    version='0.0.1',
     description='Dark matter substructure inference with ML',
     url='https://github.com/JelleAalbers/deepdarksub',
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     setup_requires=['pytest-runner'],
     install_requires=requires,
     tests_require=['pytest'],

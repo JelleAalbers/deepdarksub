@@ -35,7 +35,7 @@ class Inference:
             self,
             manada_config=None,
             fit_parameters=None):
-        manada_config = dds.load_manada_config(manada_config)
+        manada_config = dds.load_paltas_config(manada_config)
         config_dict = manada_config.config_dict
         self.fit_parameters = fit_parameters
 

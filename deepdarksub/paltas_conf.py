@@ -1,38 +1,38 @@
 import types
 from pathlib import Path
-import manada
+import paltas
 
 from .utils import exporter, load_py_file
 export, __all__ = exporter()
 
-__all__.extend(['MANADA_ROOT', 'manada'])
+__all__.extend(['PALTAS_ROOT', 'paltas'])
 
-MANADA_ROOT = Path(manada.__file__).parent
+PALTAS_ROOT = Path(paltas.__file__).parent
 
 
 @export
-def load_manada_config(x=None):
+def load_paltas_config(x=None):
     if isinstance(x, types.ModuleType):
-        # This is already a loaded manada config
+        # This is already a loaded paltas config
         return x
     if x is None:
         # Load a default config
-        x = 'config_amp_and_slope'
+        x = 'config_train'
 
     if x.endswith('.py'):
         # This is a path to a config
-        # (maybe inside manada, maybe not)
+        # (maybe inside paltas, maybe not)
         config_path = Path(x)
         config_name = Path(x).stem
     else:
-        # This is one of manada's named configs
+        # This is one of paltas's named configs
         config_name = x
-        config_path = MANADA_ROOT / 'Configs' / (x + '.py')
+        config_path = PALTAS_ROOT / 'Configs' / 'acs' / (x + '.py')
     assert config_path.exists()
 
     return load_py_file(
         str(config_path),
-        'manada_config_' + config_name)
+        'paltas_config_' + config_name)
 
 
 @export
