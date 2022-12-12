@@ -21,8 +21,8 @@ parser.add_argument(
     '--architecture', default='xresnet34',
     help='Network architecture to use')
 parser.add_argument(
-    '--dataset', default='dl_ss_npy',
-    help='Dataset to use, must be a .zip in SCRATCH')
+    '--dataset', default='acs_100k_dds',
+    help='Dataset to use, must be a .zip or .tar in SCRATCH, or dir in LSCRATCH')
 parser.add_argument(
     '--log', nargs='+',
     help='Short names of fit parameters for which NN should '
@@ -123,11 +123,18 @@ if train_config['uncertainty'] == 'correlated':
 
 data_dir = Path(LSCRATCH) / train_config['dataset_name']
 if not data_dir.exists():
+    zip_path = Path(SCRATCH) / (train_config["dataset_name"] + '.zip')
+    if zip_path.exists():
+        command = f'7z x {str(zip_path)} -o{LSCRATCH}'
+    else:
+        tar_path = Path(SCRATCH) / (train_config["dataset_name"] + '.tar')
+        if not tar_path.exists():
+            raise FileNotFoundError(
+                f"{train_config['dataset_name']} not found in SCRATCH or LSCRATCH")
+        command = f'tar -xf {str(tar_path)} -C {LSCRATCH}'
     print(f"Extracting training data to {data_dir} (will take a minute or so)")
-    command = f'7z x {SCRATCH}/{train_config["dataset_name"]}.zip -o{LSCRATCH}'
     dds.run_command(command)
 model = dds.Model(**train_config, base_dir=LSCRATCH)
-#model = dds.Model(**train_config, base_dir=SCRATCH)
 
 if args.finetune:
     # Load earlier net, but keep final linear layer weights random
